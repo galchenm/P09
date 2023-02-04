@@ -1,0 +1,17 @@
+crystallography:
+    method: "serial" #"rotational" #
+    XDS_INP_template: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/XDS.INP"
+    ORGX: 2560
+    ORGY: 1234
+    DISTANCE_OFFSET: 0.002 #for serial it should be in mm; for XDS in m
+    command_for_processing: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/turbo-index-p09" #"xds_par"
+    raw_directory: "/asap3/petra3/gpfs/p09/2022/data/11016565/raw"
+    converted_directory: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/convert"
+    processed_directory: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/processed"
+    geometry_for_conversion: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/lambda1M5_80mm_v5_grid.geom"
+    geometry_for_processing: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/geoms/eiger4m_v0_template.geom"
+    data_h5path: "/entry/instrument/detector/data"
+    cell_file: None
+    energy: 12500
+    DETECTOR_DISTANCE: 0.1965 #for serial for now it should be in mm
+    

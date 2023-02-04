@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# Split a large indexing job into many small tasks and submit using SLURM
+
+# ./turbo-index my-files.lst label my.geom /location/for/streams
+
+# Copyright © 2016-2017 Deutsches Elektronen-Synchrotron DESY,
+#                       a research centre of the Helmholtz Association.
+#
+# Authors:
+#   2016      Steve Aplin <steve.aplin@desy.de>
+#   2016-2017 Thomas White <taw@physics.org>
+
+RAW=$1
+PROC=$2
+PDB=$3
+
+GEOM=geometry.geom
+SPLIT=250  # Size of job chunks
+
+cd $PROC
+
+STREAMDIR=streams
+mkdir $STREAMDIR
+ERRORDIR=error
+mkdir $ERRORDIR
+
+NAME1=$(basename $PROC)
+echo $NAME1
+
+source /etc/profile.d/modules.sh
+module load maxwell xray crystfel
+module load hdf5/1.10.5
+
+
+find $RAW -name '*.h5' | sort > list_h5.lst
+find $RAW -name '*.cbf' | sort > list_cbf.lst
+
+filetype=0
+filesize=$(ls -lh list_h5.lst | awk '{print  $5}')
+if [ $filesize != "0" ]; then
+  echo Found h5 files
+  filetype=1
+fi
+
+filesize=$(ls -lh list_cbf.lst | awk '{print  $5}')
+if [ $filesize != "0" ]; then
+  echo Found cbf files
+  filetype=2
+fi
+
+if [[ $filetype -eq 0 ]]; then
+  echo No .h5 or .cbf files found in the raw folder. Exiting.
+  exit 0
+fi
+
+if [[ $filetype -eq 1 ]]; then
+  list_events -i list_h5.lst -g $GEOM -o list_cbf.lst
+
+fi
+
+split -a 3 -d -l $SPLIT list_cbf.lst events-${NAME1}.lst
+
+
+for FILE in events-${NAME1}.lst*; do
+
+    NAME=`echo $FILE | sed -e "s/events-${NAME1}.lst/${NAME1}/"`
+#    STREAM=`echo $FILE | sed -e "s/split-events-${RUN}.lst/${RUN}.stream/"`
+    STREAM=${NAME}.stream
+    SLURMFILE="${NAME}.sh"
+
+    echo "#!/bin/sh" > $SLURMFILE
+    echo >> $SLURMFILE
+
+    echo "#SBATCH --partition=all" >> $SLURMFILE  # Set your partition here
+#    echo "#SBATCH --partition=cfel,cfel-cdi,short,upex,all" >> $SLURMFILE  # Set your partition here
+    echo "#SBATCH --time=4:00:00" >> $SLURMFILE
+#    echo "#SBATCH --exclude=max-exfl094,max-exfl095,max-exfl096,max-exfl049,max-exfl047,max-exfl048,max-exfl024,max-exfl036,max-exfl037,max-exfl022,max-exfl082,max-exfl085,max-exfl142,max-exfl200" >> $SLURMFILE
+#    echo "#SBATCH --exclude=max-exfl109,max-exfl103" >> $SLURMFILE
+    echo "#SBATCH --nodes=1" >> $SLURMFILE
+    echo "#SBATCH --nice=100" >> $SLURMFILE
+#    echo "#SBATCH --mem=500000" >> $SLURMFILE
+#	echo "#SBATCH  --cpu-freq=2600000" >> $SLURMFILE
+    echo >> $SLURMFILE
+
+#    echo "#SBATCH --workdir   $PWD" >> $SLURMFILE
+    echo "#SBATCH --job-name  $NAME" >> $SLURMFILE
+    echo "#SBATCH --output    $ERRORDIR/$NAME-%N-%j.out" >> $SLURMFILE
+    echo "#SBATCH --error     $ERRORDIR/$NAME-%N-%j.err" >> $SLURMFILE
+    echo >> $SLURMFILE
+
+    echo "source /etc/profile.d/modules.sh" >> $SLURMFILE
+    echo "module load maxwell xray crystfel" >> $SLURMFILE
+#    echo "module load hdf5-openmpi/1.10.5" >> $SLURMFILE
+    echo "module load hdf5/1.10.5" >> $SLURMFILE
+#    echo "indexamajig --version" >> $SLURMFILE
+
+    echo >> $SLURMFILE
+
+    command="indexamajig -i $FILE -o $STREAMDIR/$STREAM"
+    command="$command -j 80 -g $GEOM --int-radius=3,6,8"
+    command="$command --peaks=peakfinder8 --min-snr=6 --min-res=10 --max-res=2000 --threshold=20 --min-pix-count=2 --max-pix-count=50 --min-peaks=20 --local-bg-radius=3"
+    command="$command --indexing=mosflm-latt-nocell  -p $PDB --no-check-cell"
+#	command="$command --indexing=xgandalf --no-cell-combinations --multi -p $PDB"
+	#command="$command --indexing=mosflm-latt-nocell --multi -p $PDB"
+	#command="$command --indexing=mosflm-latt-nocell --multi"
+
+    echo $command >> $SLURMFILE
+
+    sbatch $SLURMFILE
+
+done
