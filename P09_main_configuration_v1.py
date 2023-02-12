@@ -29,6 +29,7 @@ os.nice(0)
 
 #This is needed to check the number of running/pending processes
 USER='galchenm' #!!!PLEASE CHANGE IT!!!
+CURRENT_PATH_OF_SCRIPT = '/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing'  #!!!PLEASE CHANGE IT!!!
 
 def setup_logger():
    level = logging.INFO
@@ -46,7 +47,7 @@ def setup_logger():
 
 
 def converter_start(
-                    current_raw_folder_for_conversion, converted_directory, current_data_processing_folder
+                    current_raw_folder_for_conversion, converted_directory, current_data_processing_folder, experiment_method
                     ):
     global raw_directory
     global information
@@ -60,7 +61,7 @@ def converter_start(
     
     command_for_data_processing = information['crystallography']['command_for_processing']
     XDS_INP_template = information['crystallography']['XDS_INP_template']
-    experiment_method = information['crystallography']['method']
+    #experiment_method = information['crystallography']['method']
     cell_file = information['crystallography']['cell_file']
     geometry_for_conversion = information['crystallography']['geometry_for_conversion']
     geometry_for_processing = information['crystallography']['geometry_for_processing']
@@ -90,19 +91,20 @@ def converter_start(
         fh.writelines("#SBATCH --error=%s\n" % err_file)
         fh.writelines("source /etc/profile.d/modules.sh\n")
         fh.writelines("module load maxwell python/3.9\n")
-        command = f'python3 /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/cbf.py --d {current_raw_folder_for_conversion} --g {geometry_for_conversion} --o {converted_directory} --r {raw_directory} --h5p {h5path}'
+        command = f'python3 {CURRENT_PATH_OF_SCRIPT}/cbf.py --d {current_raw_folder_for_conversion} --g {geometry_for_conversion} --o {converted_directory} --r {raw_directory} --h5p {h5path}'
         fh.writelines(f"{command}\n")
         logger.info(f'INFO: Execute {command}')
         if experiment_method == 'rotational':
-            command = f'python3 /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/xds.py {converted_directory} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {XDS_INP_template}'
+            command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {converted_directory} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {XDS_INP_template}'
             fh.writelines(f"{command}\n")
             logger.info(f'INFO: Execute {command}')
         else:
-            serial_data_processing(converted_directory, current_data_processing_folder)
+            serial_start(converted_directory, current_data_processing_folder)
             
             logger.info(f'INFO: Execute {command}')
     os.system("sbatch %s" % job_file)
-
+    
+''' 
 def geometry_fill_template_for_serial(current_data_processing_folder):
     global information
     
@@ -131,8 +133,7 @@ def geometry_fill_template_for_serial(current_data_processing_folder):
         monitor_file.write(result)
     monitor_file.close()
     os.remove(os.path.join(current_data_processing_folder, 'template.geom'))
-    
-    
+   
 def serial_data_processing(
                             folder_with_raw_data, current_data_processing_folder
                            ):
@@ -163,9 +164,30 @@ def serial_data_processing(
         fh.writelines("module load xray maxwell crystfel\n")
         fh.writelines(f"{command_for_data_processing} {folder_with_raw_data} {current_data_processing_folder} {cell_file}\n")
     os.system("sbatch %s" % job_file)
+'''
 
 
-
+def serial_start(
+              folder_with_raw_data, current_data_processing_folder
+              ):
+    global information
+    
+    #ORGX and ORGY are the origing of the detector that is needed for xds data processing
+    ORGX = information['crystallography']['ORGX']
+    ORGY = information['crystallography']['ORGY']
+    
+    #DISTANCE_OFFSET is the offset for recalculation of real detector distance required for XDS
+    DISTANCE_OFFSET = information['crystallography']['DISTANCE_OFFSET'] 
+    
+    cell_file = information['crystallography']['cell_file']
+    geometry_filename_template = information["crystallography"]["geometry_for_processing"]
+    
+    command_for_data_processing = information['crystallography']['command_for_processing']
+    logger = logging.getLogger('app')
+    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {geometry_filename_template} {cell_file}'
+    logger.info(f'INFO: Execute {command}')
+    os.system(command)
+    
 def xds_start(
               folder_with_raw_data, current_data_processing_folder
               ):
@@ -182,7 +204,7 @@ def xds_start(
     XDS_INP_template = information['crystallography']['XDS_INP_template']
                   
     logger = logging.getLogger('app')
-    command = f'python3 /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {XDS_INP_template}'
+    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {XDS_INP_template}'
     logger.info(f'INFO: Execute {command}')
     os.system(command)
 
@@ -195,7 +217,7 @@ if __name__ == "__main__":
     with open(configuration_file,'r') as file:
         information = yaml.safe_load(file)
     
-    experiment_method = information['crystallography']['method']
+    #experiment_method = information['crystallography']['method']
     raw_directory = information['crystallography']['raw_directory']
     processed_directory = information['crystallography']['processed_directory']
     converted_directory = information['crystallography']['converted_directory']
@@ -234,9 +256,18 @@ if __name__ == "__main__":
             #So for serial method we also require this file. Generally it is needed to fill the geometry template for data processing
             if any([(file == 'info.txt' and os.stat(os.path.join(root,'info.txt')).st_size != 0) for file in files]):
                 
+                info_txt = glob.glob(os.path.join(root,'info.txt'))[0]
+                experiment_method = ''
+                with open(info_txt, 'r') as f:
+                    experiment_method = next(f)
+                
+                experiment_method = experiment_method.split(':')[-1].strip()
+                print(f'experiment_method = {experiment_method}')
+                print(experiment_method == 'rotational')
+                
                 current_data_processing_folder = f'{processed_directory}{root[len(raw_directory):]}'
                 logger.info(f'current_data_processing_folder: {current_data_processing_folder}')
-                
+                print(f'current_data_processing_folder: {current_data_processing_folder}')
                 #create the same subfolder structure for processing as in raw folder
                 if not os.path.exists(current_data_processing_folder):
                     os.makedirs(current_data_processing_folder, exist_ok=True)
@@ -259,7 +290,7 @@ if __name__ == "__main__":
                     '''
                     
                     logger.info(f'{current_data_processing_folder} is skipped')
-                    pass
+                    print(f'{current_data_processing_folder} is skipped')
                 
                 elif(
                         any([file.endswith(".nxs") for file in files]) and \
@@ -272,9 +303,9 @@ if __name__ == "__main__":
                     
                     os.makedirs(f"{converted_directory}{root[len(raw_directory):]}", exist_ok=True)
                     logger.info(f"CONVERTED: {converted_directory}{root[len(raw_directory):]}")
-                    
+                    print(f"CONVERTED: {converted_directory}{root[len(raw_directory):]}")
                     converter_start(root, f"{converted_directory}{root[len(raw_directory):]}",\
-                                    current_data_processing_folder)
+                                    current_data_processing_folder, experiment_method)
                 elif (
                         any([file.endswith(".nxs") for file in files]) and \
                         os.path.exists(f"{converted_directory}{root[len(raw_directory):]}")
@@ -283,13 +314,20 @@ if __name__ == "__main__":
                     #No conversion, just running xds for converted files
                     if experiment_method == 'rotational':
                         logger.info(f"XDS : {converted_directory}{root[len(raw_directory):]}")
+                        print(f"XDS : {converted_directory}{root[len(raw_directory):]}")
                         xds_start(f"{converted_directory}{root[len(raw_directory):]}", current_data_processing_folder)
                     else: #serial
-                        serial_data_processing(f"{converted_directory}{root[len(raw_directory):]}", current_data_processing_folder)
+                        logger.info(f"SERIAL : {converted_directory}{root[len(raw_directory):]}")
+                        print(f"SERIAL : {converted_directory}{root[len(raw_directory):]}")
+                        serial_start(f"{converted_directory}{root[len(raw_directory):]}", current_data_processing_folder)
                 else:
-                    logger.info(f'XDS : {root}')
+                    
                     if experiment_method == 'rotational':
+                        logger.info(f'XDS : {root}')
+                        print(f'XDS : {root}')
                         xds_start(root, current_data_processing_folder)
                     else: #serial
-                        serial_data_processing(root, current_data_processing_folder)
-        time.sleep(20)
+                        logger.info(f'SERIAL : {root}')
+                        print(f'SERIAL : {root}')
+                        serial_start(root, current_data_processing_folder)
+        time.sleep(2)
