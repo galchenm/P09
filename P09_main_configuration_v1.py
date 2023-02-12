@@ -99,8 +99,8 @@ def converter_start(
             logger.info(f'INFO: Execute {command}')
         else:
             serial_data_processing(converted_directory, current_data_processing_folder)
-            pass
-            #logger.info(f'INFO: Execute {command}')
+            
+            logger.info(f'INFO: Execute {command}')
     os.system("sbatch %s" % job_file)
 
 def geometry_fill_template_for_serial(current_data_processing_folder):
