@@ -58,7 +58,7 @@ def geometry_fill_template_for_serial(current_data_processing_folder):
     
     
 def serial_data_processing(
-                            folder_with_raw_data, current_data_processing_folder\
+                            folder_with_raw_data, current_data_processing_folder,\
                             command_for_data_processing, cell_file
                            ):
     job_file = os.path.join(current_data_processing_folder,"%s_serial.sh" % current_data_processing_folder.split("/")[-1])
@@ -82,7 +82,7 @@ def serial_data_processing(
 
 
 def filling_template(
-                        folder_with_raw_data, current_data_processing_folder, geometry_filename_template, data_h5path\
+                        folder_with_raw_data, current_data_processing_folder, geometry_filename_template, data_h5path,\
                         ORGX=0 , ORGY=0, DISTANCE_OFFSET=0, command_for_data_processing='turbo-index-P09', cell_file='lyzo.pdb'
                     ):
 
@@ -117,10 +117,11 @@ def filling_template(
             monitor_file.write(result)
         monitor_file.close()
         os.remove(os.path.join(current_data_processing_folder, 'template.geom'))
+        print(command_for_data_processing)
         serial_data_processing(
-                            folder_with_raw_data, current_data_processing_folder\
-                            command_for_data_processing, cell_file
-                           )
+                               folder_with_raw_data, current_data_processing_folder,\
+                               command_for_data_processing, cell_file
+                              )
 
 folder_with_raw_data = sys.argv[1]
 current_data_processing_folder = sys.argv[2]
@@ -130,10 +131,10 @@ DISTANCE_OFFSET = float(sys.argv[5])
 command_for_data_processing = sys.argv[6]
 geometry_filename_template = sys.argv[7]            
 cell_file = sys.argv[8] 
-
+data_h5path = sys.argv[9] 
 
 filling_template(
-                        folder_with_raw_data, current_data_processing_folder, geometry_filename_template, data_h5path\
+                        folder_with_raw_data, current_data_processing_folder, geometry_filename_template, data_h5path,\
                         ORGX, ORGY, DISTANCE_OFFSET, command_for_data_processing, cell_file
                     )
                     
