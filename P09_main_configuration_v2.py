@@ -81,9 +81,11 @@ def converter_start(
     #DISTANCE_OFFSET is the offset for recalculation of real detector distance required for XDS
     DISTANCE_OFFSET = configuration['crystallography']['DISTANCE_OFFSET'] 
     
-    command_for_data_processing = configuration['crystallography']['command_for_processing']
+    command_for_processing_rotational = configuration['crystallography']['command_for_processing_rotational']
+    
+    
     XDS_INP_template = configuration['crystallography']['XDS_INP_template']
-    #experiment_method = configuration['crystallography']['method']
+    
     cell_file = configuration['crystallography']['cell_file']
     geometry_for_conversion = configuration['crystallography']['geometry_for_conversion']
     geometry_for_processing = configuration['crystallography']['geometry_for_processing']
@@ -117,7 +119,7 @@ def converter_start(
         fh.writelines(f"{command}\n")
         logger.info(f'INFO: Execute {command}')
         if experiment_method == 'rotational':
-            command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {converted_directory} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {XDS_INP_template}'
+            command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {converted_directory} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_rotational} {XDS_INP_template}'
             fh.writelines(f"{command}\n")
             logger.info(f'INFO: Execute {command}')
         else:
@@ -141,10 +143,10 @@ def serial_start(
     cell_file = configuration['crystallography']['cell_file']
     geometry_filename_template = configuration["crystallography"]["geometry_for_processing"]
     
-    command_for_data_processing = configuration['crystallography']['command_for_processing']
+    command_for_processing_serial = configuration['crystallography']['command_for_processing_serial']
     data_h5path = configuration['crystallography']['data_h5path'] 
     logger = logging.getLogger('app')
-    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {geometry_filename_template} {cell_file} {data_h5path}'
+    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_serial} {geometry_filename_template} {cell_file} {data_h5path}'
     logger.info(f'INFO: Execute {command}')
     os.system(command)
     
@@ -160,11 +162,11 @@ def xds_start(
     #DISTANCE_OFFSET is the offset for recalculation of real detector distance required for XDS
     DISTANCE_OFFSET = configuration['crystallography']['DISTANCE_OFFSET'] 
     
-    command_for_data_processing = configuration['crystallography']['command_for_processing']
+    command_for_processing_rotational = configuration['crystallography']['command_for_processing_rotational']
     XDS_INP_template = configuration['crystallography']['XDS_INP_template']
                   
     logger = logging.getLogger('app')
-    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {XDS_INP_template}'
+    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_rotational} {XDS_INP_template}'
     logger.info(f'INFO: Execute {command}')
     os.system(command)
 
@@ -178,7 +180,7 @@ def main(root):
     #ATTENTION! Here I'm checking the existance of info.txt file, if there is none or this file is empty, folder will not be processed!!!
     #So for serial method we also require this file. Generally it is needed to fill the geometry template for data processing
     files =  [f for f in os.listdir(root) if os.path.isfile(os.path.join(root, f))]
-    print(files)
+    
     if any([(file == 'info.txt' and os.stat(os.path.join(root,'info.txt')).st_size != 0) for file in files]):
         
         info_txt = glob.glob(os.path.join(root,'info.txt'))[0]
@@ -192,7 +194,7 @@ def main(root):
         
         current_data_processing_folder = f'{processed_directory}{root[len(raw_directory):]}'
         logger.info(f'current_data_processing_folder ({experiment_method} method): {current_data_processing_folder}')
-        print(f'current_data_processing_folder ({experiment_method} method): {current_data_processing_folder}')
+        
         #create the same subfolder structure for processing as in raw folder
         if not os.path.exists(current_data_processing_folder):
             os.makedirs(current_data_processing_folder, exist_ok=True)
@@ -215,7 +217,7 @@ def main(root):
             '''
             
             logger.info(f'{current_data_processing_folder} is skipped')
-            print(f'{current_data_processing_folder} is skipped')
+            
         
         elif(
                 any([file.endswith(".nxs") for file in files]) and \
@@ -228,7 +230,7 @@ def main(root):
             
             os.makedirs(f"{converted_directory}{root[len(raw_directory):]}", exist_ok=True)
             logger.info(f"CONVERTED: {converted_directory}{root[len(raw_directory):]}")
-            print(f"CONVERTED: {converted_directory}{root[len(raw_directory):]}")
+            
             converter_start(root, f"{converted_directory}{root[len(raw_directory):]}",\
                             current_data_processing_folder, experiment_method)
         elif (
@@ -239,21 +241,21 @@ def main(root):
             #No conversion, just running xds for converted files
             if experiment_method == 'rotational':
                 logger.info(f"XDS: {converted_directory}{root[len(raw_directory):]}")
-                print(f"XDS : {converted_directory}{root[len(raw_directory):]}")
+                
                 xds_start(f"{converted_directory}{root[len(raw_directory):]}", current_data_processing_folder)
             else: #serial
                 logger.info(f"SERIAL: {converted_directory}{root[len(raw_directory):]}")
-                print(f"SERIAL: {converted_directory}{root[len(raw_directory):]}")
+                
                 serial_start(f"{converted_directory}{root[len(raw_directory):]}", current_data_processing_folder)
         else:
             
             if experiment_method == 'rotational':
                 logger.info(f'XDS: {root}')
-                print(f'XDS: {root}')
+                
                 xds_start(root, current_data_processing_folder)
             else: #serial
                 logger.info(f'SERIAL: {root}')
-                print(f'SERIAL: {root}')
+                
                 serial_start(root, current_data_processing_folder)
     else:
         logger.info(f"In {root} there is no info.txt file.")
@@ -273,7 +275,7 @@ if __name__ == "__main__":
     processed_directory = configuration['crystallography']['processed_directory']
     converted_directory = configuration['crystallography']['converted_directory']
     
-    print(configuration)
+    
     logger.info(f"Configuration: {configuration}")
     
     if not os.path.exists(converted_directory):

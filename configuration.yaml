@@ -3,7 +3,8 @@ crystallography:
     ORGX: 2560
     ORGY: 1234
     DISTANCE_OFFSET: 20 # [mm]
-    command_for_processing: "xds_app" #"/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/turbo-index-p09" #"xds_par"
+    command_for_processing_rotational: "xds_app" 
+    command_for_processing_serial: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/turbo-index-p09" #"xds_par"
     raw_directory: "/asap3/petra3/gpfs/p09/2022/data/11016565/raw"
     converted_directory: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/convert"
     processed_directory: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/processed"

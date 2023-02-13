@@ -117,7 +117,7 @@ def filling_template(
             monitor_file.write(result)
         monitor_file.close()
         os.remove(os.path.join(current_data_processing_folder, 'template.geom'))
-        print(command_for_data_processing)
+        
         serial_data_processing(
                                folder_with_raw_data, current_data_processing_folder,\
                                command_for_data_processing, cell_file
