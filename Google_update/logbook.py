@@ -65,30 +65,37 @@ def get_resolution(CORRECTLP):
             l = re.sub(r"\s+", "**", lines[i_start].strip('\n')).split('**')[1:]
             
             if len(l) == 9:
-                res1, I1 = float(l[0]), float(l[2])
-                p_res1, p_I1 = 0., 0.
+                res, I_over_sigma = float(l[0]), float(l[2])
+                prev_res, prev_I_over_sigma = 0., 0.
+                
+                if I_over_sigma < 1:
+                    return None
+                
+                while I_over_sigma >= 1. and i_start < index2:
+                    if I_over_sigma == 1.:
+                        return res
 
-                while I1 >= 1. and i_start < index2:
-                    if I1 == 1.:
-                        return res1
-
-                    p_res1, p_I1 = res1, I1
+                    prev_res, prev_I_over_sigma = res, I_over_sigma
                     i_start += 1
                     l = re.sub(r"\s+", "**", lines[i_start].strip('\n')).split('**')[1:]
                     try:
-                        res1, I1 = float(l[0]), float(l[2])
+                        res, I_over_sigma = float(l[0]), float(l[2])
                     except ValueError:
-                        return p_res1
+                        return prev_res
                 
-                k = round((I1 - p_I1)/(res1 - p_res1),3)
-                b = round((res1*p_I1-p_res1*I1)/(res1-p_res1),3)
+                
+                
+                k = round((I_over_sigma - prev_I_over_sigma)/(res - prev_res),3)
+                b = round((res*prev_I_over_sigma - prev_res*I_over_sigma)/(res-prev_res),3)
+                
                 try:
                     resolution = round((1-b)/k,3)
+                    
                 except ZeroDivisionError:
-                    return -1000
+                    return None
             else:
                 print(f'Something wrong with data in {CORRECTLP}')
-                return -5000
+                return None
 
     return resolution
 
@@ -111,22 +118,22 @@ def update_sheets():
 
 
     google_sheet = pd.DataFrame(list_of_hashes)
-    print(google_sheet)
+    
     google_runs = [i for i in google_sheet[google_run_field].tolist() if len(str(i)) > 0]
     headers = google_sheet.columns.tolist()
     
-    runs = [path[len(processed_folder)+1:].split('/j_stream')[0] for path in glob.glob(f'{processed_folder}/**/*.stream', recursive=True)] + [path[len(processed_folder)+1:].replace('/CORRECT.LP', '') for path in glob.glob(f'{processed_folder}/**/CORRECT.LP', recursive=True)]
-    print(runs)
-    #runs = [path[len(processed_folder):].replace('/','') for path in glob.glob(f'{processed_folder}/*/')]
+    #runs = [path[len(processed_folder)+1:].split('/j_stream')[0] for path in glob.glob(f'{processed_folder}/**/*.stream', recursive=True)] + [path[len(processed_folder)+1:].replace('/CORRECT.LP', '') for path in glob.glob(f'{processed_folder}/**/CORRECT.LP', recursive=True)]
+    runs = [os.path.dirname(str(path))[len(processed_folder)+1:] for path in Path(processed_folder).rglob('CORRECT.LP')] + [os.path.dirname(str(path))[len(processed_folder)+1:] for path in Path(processed_folder).rglob('*stream')]
+    
     
     for run in runs:
-        print(run)
+        
         if run not in google_runs:
             position = len(google_runs) + 2
             google_runs.append(run)
         else:
             position = google_sheet[google_run_field] == run
-        print(position)
+        
         google_sheet.loc[position, 'Run'] = run
         
         Number_of_patterns = 0
@@ -156,8 +163,8 @@ def update_sheets():
         google_sheet.loc[position, 'Hitrate%'] = Number_of_hits / Number_of_patterns * 100 if Number_of_patterns > 0 else 0
         google_sheet.loc[position, 'N. indexed patterns'] = Number_of_indexed_patterns
         google_sheet.loc[position, 'N. indexed crystals'] = Number_of_indexed_crystals
-        google_sheet.loc[position, 'Resolution'] = resolution
-        print(google_sheet)
+        google_sheet.loc[position, 'Resolution'] = str(resolution)
+        
         google_sheet.fillna('', inplace=True)
     
         sheet.update([google_sheet.columns.values.tolist()] + google_sheet.values.tolist())
