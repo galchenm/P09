@@ -58,7 +58,7 @@ def filling_template(
     
     os.chdir(current_data_processing_folder)
     
-    shutil.copy(XDS_INP_template, os.path.join(current_data_processing_folder,'template.INP'))
+    shutil.copy(XDS_INP_template, os.path.join(current_data_processing_folder, XDS_INP_template))
 
     info_txt = ''
     if len(glob.glob(os.path.join(folder_with_raw_data,'info.txt')))>0 and os.stat(os.path.join(folder_with_raw_data,'info.txt')).st_size != 0:
@@ -109,7 +109,7 @@ def filling_template(
             result = src.substitute(template_data)
             monitor_file.write(result)
         monitor_file.close()
-        os.remove(os.path.join(current_data_processing_folder, 'template.INP'))
+        os.remove(os.path.join(current_data_processing_folder, XDS_INP_template))
         
         
         xds_start(current_data_processing_folder, command_for_data_processing)
