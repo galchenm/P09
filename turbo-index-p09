@@ -10,6 +10,7 @@
 # Authors:
 #   2016      Steve Aplin <steve.aplin@desy.de>
 #   2016-2017 Thomas White <taw@physics.org>
+#   2023      Oleksandr Yefanov
 
 RAW=$1
 PROC=$2
@@ -24,6 +25,9 @@ STREAMDIR=streams
 mkdir $STREAMDIR
 ERRORDIR=error
 mkdir $ERRORDIR
+JOINEDSTREAMDIR=j_stream
+mkdir $JOINEDSTREAMDIR
+
 
 NAME1=$(basename $PROC)
 echo $NAME1
@@ -66,13 +70,14 @@ for FILE in events-${NAME1}.lst*; do
 
     NAME=`echo $FILE | sed -e "s/events-${NAME1}.lst/${NAME1}/"`
 #    STREAM=`echo $FILE | sed -e "s/split-events-${RUN}.lst/${RUN}.stream/"`
-    STREAM=${NAME}.stream
-    SLURMFILE="${NAME}.sh"
+    #STREAM=${NAME}.stream
+    STREAM=`echo $FILE | sed -e "s/events-${NAME1}.lst/${NAME1}.stream/"`
+	SLURMFILE="${NAME}.sh"
 
     echo "#!/bin/sh" > $SLURMFILE
     echo >> $SLURMFILE
 
-    echo "#SBATCH --partition=all" >> $SLURMFILE  # Set your partition here
+    echo "#SBATCH --partition=allcpu,upex" >> $SLURMFILE  # Set your partition here
 #    echo "#SBATCH --partition=cfel,cfel-cdi,short,upex,all" >> $SLURMFILE  # Set your partition here
     echo "#SBATCH --time=4:00:00" >> $SLURMFILE
 #    echo "#SBATCH --exclude=max-exfl094,max-exfl095,max-exfl096,max-exfl049,max-exfl047,max-exfl048,max-exfl024,max-exfl036,max-exfl037,max-exfl022,max-exfl082,max-exfl085,max-exfl142,max-exfl200" >> $SLURMFILE
@@ -100,11 +105,13 @@ for FILE in events-${NAME1}.lst*; do
     command="indexamajig -i $FILE -o $STREAMDIR/$STREAM"
     command="$command -j 80 -g $GEOM --int-radius=3,6,8"
     command="$command --peaks=peakfinder8 --min-snr=6 --min-res=10 --max-res=2000 --threshold=20 --min-pix-count=2 --max-pix-count=50 --min-peaks=20 --local-bg-radius=3"
-    command="$command --indexing=mosflm-latt-nocell  -p $PDB --no-check-cell"
+    command="$command --indexing=mosflm-latt-nocell --no-check-cell"
 #	command="$command --indexing=xgandalf --no-cell-combinations --multi -p $PDB"
 	#command="$command --indexing=mosflm-latt-nocell --multi -p $PDB"
 	#command="$command --indexing=mosflm-latt-nocell --multi"
-
+    if [ -n "$PDB" ]; then
+	command="$command -p $PDB";
+    fi
     echo $command >> $SLURMFILE
 
     sbatch $SLURMFILE

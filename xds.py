@@ -37,7 +37,8 @@ def xds_start(current_data_processing_folder, command_for_data_processing):
     with open(job_file, 'w+') as fh:
         fh.writelines("#!/bin/sh\n")
         fh.writelines("#SBATCH --job=%s\n" % job_file)
-        fh.writelines("#SBATCH --partition=allcpu\n")
+        #fh.writelines("#SBATCH --partition=allcpu\n")
+        fh.writelines("#SBATCH --partition=upex\n")
         fh.writelines("#SBATCH --time=12:00:00\n")
         fh.writelines("#SBATCH --nodes=1\n")
         fh.writelines("#SBATCH --nice=100\n")
@@ -64,55 +65,55 @@ def filling_template(
     if len(glob.glob(os.path.join(folder_with_raw_data,'info.txt')))>0 and os.stat(os.path.join(folder_with_raw_data,'info.txt')).st_size != 0:
         info_txt = glob.glob(os.path.join(folder_with_raw_data,'info.txt'))[0]
         
-        run_type = ''
-        with open(info_txt, 'r') as f:
-            run_type = next(f)
+        #run_type = ''
+        #with open(info_txt, 'r') as f:
+        #    run_type = next(f)
         
-        run_type = run_type.split(':')[-1].strip()
-        if (run_type == 'rotational'):
+        #run_type = run_type.split(':')[-1].strip()
+        #if (run_type == 'rotational'):
             
-            command = f' grep -e "distance" {info_txt}'
+        command = f' grep -e "distance" {info_txt}'
+        result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
+        DETECTOR_DISTANCE = float(re.search(r'\d+\.\d+',result).group(0)) + DISTANCE_OFFSET
+        
+        
+        command =  f' grep -e "frames" {info_txt}'
+        result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
+        NFRAMES = int(re.search(r'\d+',result).group(0))
+        
+        
+        try:
+            command =  f' grep -e "start angle" {info_txt}'
             result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
-            DETECTOR_DISTANCE = float(re.search(r'\d+\.\d+',result).group(0)) + DISTANCE_OFFSET
+            STARTING_ANGLE = float(re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?",result).group(0))#float(re.search(r'\d+\.\d+',result).group(0))
             
-            
-            command =  f' grep -e "frames" {info_txt}'
-            result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
-            NFRAMES = int(re.search(r'\d+',result).group(0))
-            
-            
-            try:
-                command =  f' grep -e "start angle" {info_txt}'
-                result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
-                STARTING_ANGLE = float(re.search(r'\d+\.\d+',result).group(0))
-                
-            except subprocess.CalledProcessError:
-                STARTING_ANGLE = 0
+        except subprocess.CalledProcessError:
+            STARTING_ANGLE = 0
 
-            try:
-                command =  f' grep -e "degrees/frame" {info_txt}'
-                result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
-                OSCILLATION_RANGE = float(re.search(r'\d+\.\d+',result).group(0))
-                
-            except subprocess.CalledProcessError:
-                OSCILLATION_RANGE = 0
-                
-            command =  f' grep -e "wavelength" {info_txt}'
+        try:
+            command =  f' grep -e "degrees/frame" {info_txt}'
             result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
-            WAVELENGTH =  float(re.search(r'\d+\.\d+',result).group(0))
+            OSCILLATION_RANGE = float(re.search(r'\d+\.\d+',result).group(0))
             
-            template_data = {"DETECTOR_DISTANCE":DETECTOR_DISTANCE, "ORGX":ORGX, "ORGY":ORGY, "NFRAMES":NFRAMES, "NAME_TEMPLATE_OF_DATA_FRAMES":NAME_TEMPLATE_OF_DATA_FRAMES, "STARTING_ANGLE":STARTING_ANGLE,"OSCILLATION_RANGE":OSCILLATION_RANGE, "WAVELENGTH":WAVELENGTH}
+        except subprocess.CalledProcessError:
+            OSCILLATION_RANGE = 0
             
-            monitor_file = open(f'XDS.INP', 'w')
-            with open(os.path.join(current_data_processing_folder,'template.INP'), 'r') as f:
-                src = Template(f.read())
-                result = src.substitute(template_data)
-                monitor_file.write(result)
-            monitor_file.close()
-            os.remove(os.path.join(current_data_processing_folder, 'template.INP'))
-            
-            
-            xds_start(current_data_processing_folder, command_for_data_processing)
+        command =  f' grep -e "wavelength" {info_txt}'
+        result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
+        WAVELENGTH =  float(re.search(r'\d+\.\d+',result).group(0))
+        
+        template_data = {"DETECTOR_DISTANCE":DETECTOR_DISTANCE, "ORGX":ORGX, "ORGY":ORGY, "NFRAMES":NFRAMES, "NAME_TEMPLATE_OF_DATA_FRAMES":NAME_TEMPLATE_OF_DATA_FRAMES, "STARTING_ANGLE":STARTING_ANGLE,"OSCILLATION_RANGE":OSCILLATION_RANGE, "WAVELENGTH":WAVELENGTH}
+        
+        monitor_file = open(f'XDS.INP', 'w')
+        with open(os.path.join(current_data_processing_folder,'template.INP'), 'r') as f:
+            src = Template(f.read())
+            result = src.substitute(template_data)
+            monitor_file.write(result)
+        monitor_file.close()
+        os.remove(os.path.join(current_data_processing_folder, 'template.INP'))
+        
+        
+        xds_start(current_data_processing_folder, command_for_data_processing)
             
     
 folder_with_raw_data = sys.argv[1]

@@ -2,10 +2,7 @@
 JOB= XYCORR INIT COLSPOT IDXREF DEFPIX INTEGRATE CORRECT
 !JOB= DEFPIX INTEGRATE CORRECT
 ! parameters specifically for this detector and beamline:
-MINIMUM_VALID_PIXEL_VALUE= 0
-OVERLOAD= 60000 ! ????
-SENSOR_THICKNESS= 0.5
-NX=1170 NY=1564 QX= 0.055 QY= 0.055 ! to make CORRECT happy if frames are unavailable
+! parameters specifically for this detector and beamline:
 
 ORGX=$ORGX ORGY=$ORGY ! Detector origin (pixels)
 
@@ -28,6 +25,9 @@ UNIT_CELL_CONSTANTS= 79 79 38 90 90 90 ! put correct values if known
 INCLUDE_RESOLUTION_RANGE=50 0  ! after CORRECT, insert high resol limit; re-run CORRECT
 ! IDXREF now obeys INCLUDE_RESOLUTION_RANGE and EXCLUDE_RESOLUTION_RANGE to exclude ice-rings
 
+INCLUDE_RESOLUTION_RANGE=50 0  ! after CORRECT, insert high resol limit; re-run CORRECT
+! IDXREF now obeys INCLUDE_RESOLUTION_RANGE and EXCLUDE_RESOLUTION_RANGE to exclude ice-rings
+
 FRIEDEL'S_LAW=TRUE     ! This acts only on the CORRECT step
 ! If the anom signal turns out to be, or is known to be, very low or absent,
 ! use FRIEDEL'S_LAW=TRUE instead (or comment out the line); re-run CORRECT
@@ -43,25 +43,29 @@ FRIEDEL'S_LAW=TRUE     ! This acts only on the CORRECT step
 ! UNTRUSTED_QUADRILATERAL= x1 y1 x2 y2 x3 y3 x4 y4 ! see documentation
 !
 ! parameters with changes wrt default values:
-!DETECTOR= EIGER 
 TRUSTED_REGION=0.0 1.2 ! partially use corners of detector (0 1.4143: use all pixels)
 VALUE_RANGE_FOR_TRUSTED_DETECTOR_PIXELS=6000. 30000. ! often 7000 or 8000 is ok
-!VALUE_RANGE_FOR_TRUSTED_DETECTOR_PIXELS=6000. 30000. ! often 7000 or 8000 is ok
 STRONG_PIXEL=4           ! COLSPOT: only use strong reflections (default is 3)
-!BACKGROUND_PIXEL=2
 MINIMUM_NUMBER_OF_PIXELS_IN_A_SPOT=3 ! default of 6 is sometimes too high
-!SPOT_MAXIMUM-CENTROID=    8.00
 ! close spots/long cell axis: reduce SEPMIN and CLUSTER_RADIUS from their defaults of 7 and 3.5
 SEPMIN=4  CLUSTER_RADIUS=2 ! 4 and 2 for Pixel Array Detectors
 ! since XDS 01-MAR-2015, POSITION supersedes DISTANCE.
 ! nowadays headers are usually correct so refine POSITION in INTEGRATE but not IDXREF if low to medium resolution
 ! however, if the spots from COLSPOT extend to 2A then POSITION could, and if 1.5A POSITION should be refined
-REFINE(IDXREF)=CELL BEAM ORIENTATION AXIS POSITION ! add POSITION if high resolution, or DETECTOR_DISTANCE inaccurate
+REFINE(IDXREF)=CELL BEAM ORIENTATION AXIS  ! add POSITION if high resolution, or DETECTOR_DISTANCE inaccurate
 REFINE(INTEGRATE)= POSITION BEAM ORIENTATION ! AXIS CELL . If 1.5A or higher it is ok to refine CELL
 ! REFINE(CORRECT)=CELL BEAM ORIENTATION AXIS POSITION ! Default is: refine everything
 
-!LIB= /opt/xray/XDSAPP/plugins/durin-plugin.so
-ROTATION_AXIS= 1 0 0  ! only read by IDXREF
+! parameters specifically for this detector and beamline:
+DETECTOR= EIGER MINIMUM_VALID_PIXEL_VALUE=0 OVERLOAD= 94533
+SENSOR_THICKNESS= 0.45
+! attention CCD detectors: for very high resolution (better than 1A) make sure to specify SILICON
+! as about 32* what CORRECT.LP suggests (absorption of phosphor is much higher than that of silicon).
+! Better: read the article http://strucbio.biologie.uni-konstanz.de/xdswiki/index.php/SILICON .
+NX=2068  NY= 2162  QX= 0.075  QY= 0.075 ! to make CORRECT happy if frames are unavailable
+
+LIB= /opt/xray/XDSAPP/plugins/durin-plugin.so
+ROTATION_AXIS= -1 0 0  ! only read by IDXREF
 DIRECTION_OF_DETECTOR_X-AXIS=1 0 0
 DIRECTION_OF_DETECTOR_Y-AXIS=0 1 0
 INCIDENT_BEAM_DIRECTION=0 0 1          ! only read by IDXREF
@@ -84,17 +88,12 @@ POLARIZATION_PLANE_NORMAL=0 1 0        ! only used by CORRECT
 
 NUMBER_OF_PROFILE_GRID_POINTS_ALONG_ALPHA/BETA=13 ! Default is 9 - Increasing may improve data 
 NUMBER_OF_PROFILE_GRID_POINTS_ALONG_GAMMA=13      ! accuracy, particularly if finely-sliced on phi, 
-!UNTRUSTED_ELLIPSE= 635 735 804 904
 !                                                   and does not seem to have any downsides. 
-!EXCLUSION OF HORIZONTAL DEAD AREAS OF THE EIGER2 16M DETECTOR
-! UNTRUSTED_RECTANGLE= 1028 1041      0 4363
-! UNTRUSTED_RECTANGLE= 2068 2081      0 4363
-! UNTRUSTED_RECTANGLE= 3108 3121      0 4363
-!EXCLUSION OF VERTICAL DEAD AREAS OF THE EIGER2 16M DETECTOR 
-!UNTRUSTED_RECTANGLE=    0 100    0  1707
-! UNTRUSTED_RECTANGLE=    0 4149   1062 1101
-! UNTRUSTED_RECTANGLE=    0 4149   1612 1651
-! UNTRUSTED_RECTANGLE=    0 4149   2162 2201
-! UNTRUSTED_RECTANGLE=    0 4149   2712 2751
-! UNTRUSTED_RECTANGLE=    0 4149   3262 3301
-! UNTRUSTED_RECTANGLE=    0 4149   3812 3851
+!EXCLUSION OF VERTICAL DEAD AREAS OF THE EIGER2 4M DETECTOR
+ UNTRUSTED_RECTANGLE= 511 515      0 2161
+ UNTRUSTED_RECTANGLE= 1022 1040      0 2161
+ UNTRUSTED_RECTANGLE= 1551 1555      0 2161
+!EXCLUSION OF HORIZONTAL DEAD AREAS OF THE EIGER 4M DETECTOR
+ UNTRUSTED_RECTANGLE=    0 2067    511  550
+ UNTRUSTED_RECTANGLE=    0 2067   1061 1100
+ UNTRUSTED_RECTANGLE=    0 2067   1611 1650
