@@ -10,6 +10,7 @@
 # Authors:
 #   2016      Steve Aplin <steve.aplin@desy.de>
 #   2016-2017 Thomas White <taw@physics.org>
+#   2023      Oleksandr Yefanov
 
 RAW=$1
 PROC=$2
@@ -24,6 +25,9 @@ STREAMDIR=streams
 mkdir $STREAMDIR
 ERRORDIR=error
 mkdir $ERRORDIR
+JOINEDSTREAMDIR=j_stream
+mkdir $JOINEDSTREAMDIR
+
 
 NAME1=$(basename $PROC)
 echo $NAME1
