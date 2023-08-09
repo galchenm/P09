@@ -133,6 +133,10 @@ geometry_filename_template = sys.argv[7]
 cell_file = sys.argv[8] 
 data_h5path = sys.argv[9] 
 
+if cell_file == "None":
+    cell_file = ""
+
+
 filling_template(
                         folder_with_raw_data, current_data_processing_folder, geometry_filename_template, data_h5path,\
                         ORGX, ORGY, DISTANCE_OFFSET, command_for_data_processing, cell_file

@@ -37,7 +37,8 @@ def xds_start(current_data_processing_folder, command_for_data_processing):
     with open(job_file, 'w+') as fh:
         fh.writelines("#!/bin/sh\n")
         fh.writelines("#SBATCH --job=%s\n" % job_file)
-        fh.writelines("#SBATCH --partition=allcpu\n")
+        #fh.writelines("#SBATCH --partition=allcpu\n")
+        fh.writelines("#SBATCH --partition=upex\n")
         fh.writelines("#SBATCH --time=12:00:00\n")
         fh.writelines("#SBATCH --nodes=1\n")
         fh.writelines("#SBATCH --nice=100\n")
@@ -58,7 +59,7 @@ def filling_template(
     
     os.chdir(current_data_processing_folder)
     
-    shutil.copy(XDS_INP_template, os.path.join(current_data_processing_folder, 'template.INP'))
+    shutil.copy(XDS_INP_template, os.path.join(current_data_processing_folder,'template.INP'))
 
     info_txt = ''
     if len(glob.glob(os.path.join(folder_with_raw_data,'info.txt')))>0 and os.stat(os.path.join(folder_with_raw_data,'info.txt')).st_size != 0:
@@ -84,7 +85,7 @@ def filling_template(
         try:
             command =  f' grep -e "start angle" {info_txt}'
             result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
-            STARTING_ANGLE = float(re.search(r'\d+\.\d+',result).group(0))
+            STARTING_ANGLE = float(re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?",result).group(0))#float(re.search(r'\d+\.\d+',result).group(0))
             
         except subprocess.CalledProcessError:
             STARTING_ANGLE = 0
