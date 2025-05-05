@@ -5,7 +5,7 @@
 """
 Example of usage:
 -offline mode
-python3 autoprocessing_pipeline_P09.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline
+python3 autoprocessing_pipeline_P09.py -i /asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing/configuration.yaml --offline
 
 -offline with block of interest
 python3 autoprocessing_pipeline_P09.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline --f /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/block_runs.lst
@@ -39,8 +39,8 @@ from utils import crystfel_geometry
 os.nice(0)
 
 # This is needed to check the number of running/pending processes
-USER = 'galchenm'  # !!!PLEASE CHANGE IT!!!
-CURRENT_PATH_OF_SCRIPT = '/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing'  # !!!PLEASE CHANGE IT!!!
+USER = 'guents'  # !!!PLEASE CHANGE IT!!!
+CURRENT_PATH_OF_SCRIPT = '/asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing'  # !!!PLEASE CHANGE IT!!!
 
 def parse_cmdline_args():
     parser = argparse.ArgumentParser(

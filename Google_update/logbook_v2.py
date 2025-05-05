@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# coding: utf8
+# python3 logbook_v2.py  /asap3/petra3/gpfs/p09/2023/data/11016752/processed/yefanov/galchenm/processed_new
+
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
@@ -9,8 +13,13 @@ import sys
 import glob
 import subprocess
 from pathlib import Path
+from collections import defaultdict
+import shlex
 
-NAME_GOOGLE_SHEET = "TEST_P09"
+
+NAME_GOOGLE_SHEET = "11016750" #the name of sheets
+rerun = False #this option is for remerging streams for re-processed serial data
+
 processed_folder = sys.argv[1]
 
 def statistic_from_streams(stream):
@@ -99,6 +108,86 @@ def get_resolution(CORRECTLP):
 
     return resolution
 
+
+def running(path_from, rerun):
+    #print('Rerun ', rerun) # type(rerun) = bool
+    dic_stream = defaultdict(list)
+    dic_list = defaultdict(list)
+    print(path_from)
+    files_lst = glob.glob(os.path.join(path_from,"*.lst?*"))
+    
+    streams = glob.glob(os.path.join(path_from,"streams", "*.stream?*"))
+    print(len(files_lst))
+    success = True
+    print(len(streams))
+    if len(files_lst) == 0 or len(streams) == 0:
+        #print("Run {} has not been processed yet".format(path_from))
+        return False
+    else:
+        
+        for file_lst in files_lst:
+            filename = os.path.basename(file_lst).replace('split-events-EV-','').replace('split-events-EV','').replace('split-events-','').replace('events-','')
+
+            suffix = re.search(r'.lst\d+', filename).group()
+            prefix = filename.replace(suffix,'')
+            
+            suffix = re.search(r'\d+', suffix).group()
+
+            key_name = prefix+'-'+suffix
+            dic_list[os.path.join(path_from, key_name)] = file_lst
+        
+        for stream in streams:
+
+            streamname = os.path.basename(stream)
+            suffix = re.search(r'.stream\d+', streamname).group()
+            prefix = streamname.replace(suffix,'')
+            
+            suffix = re.search(r'\d+', suffix).group()
+            
+            key_name = prefix+'-'+suffix
+            dic_stream[os.path.join(path_from,key_name)] = stream
+        
+        mod_files_lst = dic_list.keys() 
+        mod_streams = dic_stream.keys() 
+        
+        print(mod_files_lst)
+        print(mod_streams)
+        k_inter = set(mod_files_lst) & set(mod_streams)
+        k_diff = set(mod_files_lst) - set(mod_streams) #there is no streams for some lst files
+
+        
+        
+        if len(k_diff) != 0:
+            for k in k_diff:
+                print("There is no streams for some {}".format(k))
+                success = False
+                
+                if rerun == True:
+                    os.chdir(os.path.dirname(k))
+                    command = "sbatch {}".format(k+'.sh')
+                    os.system(command)
+                
+        for k in k_inter:
+            
+            lst = dic_list[k]
+
+            k_lst =  len([line.strip() for line in open(lst, 'r').readlines() if len(line)>0])
+            stream =  dic_stream[k]
+
+            command = 'grep -ic "Image filename:" {}'.format(stream)
+            process = subprocess.Popen(shlex.split(command), stdout=subprocess.PIPE)
+            k_stream = int(process.communicate()[0])
+
+            if k_lst != k_stream:
+                print("For {}: stream = {}, lst = {}".format(k, k_stream, k_lst))
+                success = False
+                if rerun == True:
+                    os.chdir(os.path.dirname(k))
+                    command = "sbatch {}".format(k+'.sh')
+                    os.system(command)
+
+    return success
+
 def update_sheets():
     print("updating...\n")
     
@@ -122,10 +211,9 @@ def update_sheets():
     google_runs = [i for i in google_sheet[google_run_field].tolist() if len(str(i)) > 0]
     headers = google_sheet.columns.tolist()
     
-    #runs = [path[len(processed_folder)+1:].split('/j_stream')[0] for path in glob.glob(f'{processed_folder}/**/*.stream', recursive=True)] + [path[len(processed_folder)+1:].replace('/CORRECT.LP', '') for path in glob.glob(f'{processed_folder}/**/CORRECT.LP', recursive=True)]
-    runs = [os.path.dirname(str(path))[len(processed_folder)+1:] for path in Path(processed_folder).rglob('CORRECT.LP')] + [os.path.dirname(str(path))[len(processed_folder)+1:] for path in Path(processed_folder).rglob('*stream')]
+    runs = [os.path.dirname(str(path))[len(processed_folder)+1:] for path in Path(processed_folder).rglob('CORRECT.LP')] + [os.path.dirname(str(path))[len(processed_folder)+1:].replace('/streams','') for path in Path(processed_folder).rglob('*stream?*')]
     
-    
+    #print([os.path.dirname(str(path))[len(processed_folder)+1:].replace('/streams','') for path in Path(processed_folder).rglob('*stream?*')])
     for run in runs:
         
         if run not in google_runs:
@@ -145,18 +233,34 @@ def update_sheets():
         resolution = 0
         
         CORRECT_LP = os.path.join(processed_folder, run, 'CORRECT.LP')
+        XDS_INP = os.path.join(processed_folder, run, 'XDS.INP')
         streams_path = os.path.join(processed_folder, run, 'j_stream/*stream')
         
         if os.path.exists(CORRECT_LP):
             method = 'rotational'
             resolution = get_resolution(CORRECT_LP)
+            command = f' grep -e "DATA_RANGE=" {XDS_INP}'
+            result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
+            Number_of_patterns = int(result.split(' ')[-1])
         else:
             method = 'serial'
             list_of_streams = glob.glob(streams_path)
             if len(list_of_streams) > 0:
                 stream = max(list_of_streams, key=os.path.getctime)
                 Number_of_patterns, Number_of_hits, Number_of_indexed_patterns, Number_of_indexed_crystals = statistic_from_streams(stream)
-        
+            elif len(glob.glob(os.path.join(processed_folder, run, '*.lst*'))) > 0: #we check if there any processed files at least
+                path_from = os.path.join(processed_folder, run)
+                if running(path_from, rerun):
+                    files = glob.glob(os.path.join(processed_folder, run, "streams/*.stream?*"))
+                    stream = os.path.join(processed_folder, run, "j_stream/joined.stream")
+                    command_line = "cat " + " ".join(files) + f' >> {stream}'
+                    print(f'CAT STREAM HERE {os.path.join(processed_folder, run)}')
+                    os.system(command_line)
+                    Number_of_patterns, Number_of_hits, Number_of_indexed_patterns, Number_of_indexed_crystals = statistic_from_streams(stream)
+                else:
+                    print('not processed everything')
+            else:
+                print(f'No joined stream: {run}')
         google_sheet.loc[position, 'Method'] = method
         google_sheet.loc[position, 'Total N. of patterns'] = Number_of_patterns
         google_sheet.loc[position, 'Hits'] = Number_of_hits
@@ -168,7 +272,7 @@ def update_sheets():
         google_sheet.fillna('', inplace=True)
     
     sheet.update([google_sheet.columns.values.tolist()] + google_sheet.values.tolist())
-    time.sleep(5)
+    time.sleep(25)
     
 while True:
     update_sheets()

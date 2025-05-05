@@ -10,11 +10,11 @@ NX=2463 NY=2527 QX= 0.172 QY= 0.172 ! to make CORRECT happy if frames are unavai
 !ORGX= 1250.7209 ! Detector origin x coordinate
 !ORGY= 1151.3820 ! Detector origin y coordinate 
 
-!DETECTOR_DISTANCE= 221.4 !read by XYCORR, IDXREF. Negative if detector normal points to crystal.                
+!DETECTOR_DISTANCE= 220.9945 !read by XYCORR, IDXREF. Negative if detector normal points to crystal.                
 
 ORGX=$ORGX ORGY=$ORGY ! Detector origin (pixels)
 
-DETECTOR_DISTANCE= 220.73 !$DETECTOR_DISTANCE !220.9945 !$DETECTOR_DISTANCE !read by XYCORR, IDXREF. Negative if detector normal points to crystal.               
+DETECTOR_DISTANCE= 221.4 !$DETECTOR_DISTANCE !220.9945 !$DETECTOR_DISTANCE !read by XYCORR, IDXREF. Negative if detector normal points to crystal.               
 
 
 OSCILLATION_RANGE=$OSCILLATION_RANGE

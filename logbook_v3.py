@@ -1,64 +1,79 @@
 #!/usr/bin/env python3
 # coding: utf8
-import math
-import json
-import requests
-import time
+
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import subprocess
+import shlex
+import os
+import glob
 import re
+import time
 from collections import defaultdict
 from pathlib import Path
-from google.oauth2 import service_account
-import urllib.parse
+import pandas as pd
+import numpy as np
+import sys
+import pylab
+from mpl_toolkits.mplot3d import Axes3D
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from PIL import Image
+
 from pydrive.auth import GoogleAuth
-from oauth2client.service_account import ServiceAccountCredentials
-import gspread
-import numpy as np
-import pandas as pd
-import shlex
-import subprocess
-from googleapiclient.http import MediaFileUpload
+from pydrive.drive import GoogleDrive
+
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import glob
-import os
-import sys
-import pylab
-import window_plot_volume_res
-import warnings
-warnings.filterwarnings("ignore")
+from googleapiclient.http import MediaFileUpload
 
+import urllib.parse
+import json
+import requests
 
-
-# Google Sheets API credentials
-GOOGLE_SHEETS_CREDENTIALS = 'client_secret.json'
-
-# Google Drive API token
-TOKEN = "ya29.a0AfB_byCLK3f5dFXj1JGrdiIwrkMF_5IoTV5uhuR55OnqFBQMg-1B5_RDou8MAiD0ZzR4MmNmEkWGZu-OIHGhcpczz9NKPAOQxVVyufcD9IZU8ZbvNd0inD-r6jm2kF3-dfPn0z52F7ROlqn6eeE4hC4GP0vOkxmjbhnGaCgYKATASARESFQGOcNnCHu-DAhBCcfdAvybNOwzy3w0171"
-
-TOKEN_ID = f"Bearer {TOKEN}"
+# https://developers.google.com/oauthplayground/?code=4/0AZEOvhUeNxyActECL1J6m-W1-33jebxIpR1VRHFKlJEM6VVsEDxZMNvFAX_XAh9iXKKYkw&scope=https://www.googleapis.com/auth/drive
+# token will expire every 3599s, so you have to update it
+# click the link above
+# then 1 step - find Drive Google v3 - click on the row - then select https://www.googleapis.com/auth/drive
+# accept everything and allow everything
+# then 2 step - click on the blue button with Exchange authorization code for tokens
+# and then on the right part of the web page with the name Request / Response
+# scroll down and you will see something like this with different valuse
+#{
+#  "access_token": "ya29.a0AbVbY6P-7vTKL9w8kfg8HlCH9avNfBsJphHe1-2EjIqxBbHVZqGGvpQkY_mn0CX8OxU4zQTainxbC6DTHTaaB1Km6telME1gHw41xQnpfy-McQQ8xhSR3HnkGmoJ990IUkYN4ynqipYp5WMGr3jRNLwO4nD6aCgYKAZ4SARESFQFWKvPlYK5Jo5a4Mo4EEPhMrl74kg0163", 
+#  "scope": "https://www.googleapis.com/auth/drive", 
+#  "token_type": "Bearer", 
+#  "expires_in": 3599, 
+#  "refresh_token": "1//04ZZOTY54nZLFCgYIARAAGAQSNwF-L9Ir1U5qF2ffkjq-NPLUd2JvdV7TRu83u-onOFL0jFQp1whfRrcYRqkmmMvaKAsfrgOKO-0"
+#}
+# Then copy the access_token (the right part with "" - here it is "ya29.a0AbVbY6P..")
+# and put it into token varuable here (below)
+# then execute the script as
+# module load maxwell python/3.10 crystfel
+# python3 logbook_v3.py
+token= "ya29.a0AfB_byCDKwoF0Eov7OX5b7WRmmSdcMvGsepcn7ZxxrHxKQ6bZnHN0aWcwuB-stEYMKBKM3K-AbRgBpEYBqWoas9PHhdknrY3Upo_WTpQkuGwPypTjtxaWJennr1enRTyjXOldgUSrTy_houF2QVPSEPMTgtkcI1mQckeaCgYKAQESARESFQGOcNnCsR70LAy2B1FwB55Lc_Vdtw0171"
+TOKEN_ID=f"Bearer {token}"
 
 def statistic_from_streams(stream):
     try:
-        res_hits = subprocess.run(['grep', '-rc', 'hit = 1', stream], capture_output=True, text=True, check=True).stdout.strip().split('\n')
+        res_hits = subprocess.check_output(['grep', '-rc', 'hit = 1', stream]).decode('utf-8').strip().split('\n')
         hits = int(res_hits[0])
     except subprocess.CalledProcessError:
         hits = 0
 
     try:
-        chunks = int(subprocess.run(['grep', '-c', 'Image filename', stream], capture_output=True, text=True, check=True).stdout.strip().split('\n')[0])
+        chunks = int(subprocess.check_output(['grep', '-c', 'Image filename', stream]).decode('utf-8').strip().split('\n')[0])
     except subprocess.CalledProcessError:
         chunks = 0
 
     try:
-        res_indexed = subprocess.run(['grep', '-rc', 'Begin crystal', stream], capture_output=True, text=True, check=True).stdout.strip().split('\n')
+        res_indexed = subprocess.check_output(['grep', '-rc', 'Begin crystal', stream]).decode('utf-8').strip().split('\n')
         indexed = int(res_indexed[0])
     except subprocess.CalledProcessError:
         indexed = 0
 
     try:
-        res_none_indexed_patterns = subprocess.run(['grep', '-rc', 'indexed_by = none', stream], capture_output=True, text=True, check=True).stdout.strip().split('\n')
+        res_none_indexed_patterns = subprocess.check_output(['grep', '-rc', 'indexed_by = none', stream]).decode('utf-8').strip().split('\n')
         none_indexed_patterns = int(res_none_indexed_patterns[0])
     except subprocess.CalledProcessError:
         none_indexed_patterns = 0
@@ -126,27 +141,27 @@ def get_resolution(CORRECTLP):
 def running(path_from, rerun):
     dic_stream = defaultdict(list)
     dic_list = defaultdict(list)
-    files_lst = list(Path(path_from).glob("*.lst?*"))
-    streams = list(Path(path_from, "streams").glob("*.stream?*"))
+    files_lst = glob.glob(os.path.join(path_from, "*.lst?*"))
+    streams = glob.glob(os.path.join(path_from, "streams", "*.stream?*"))
 
     if len(files_lst) == 0 or len(streams) == 0:
         return False
     else:
         for file_lst in files_lst:
-            filename = file_lst.name.replace('split-events-EV-', '').replace('split-events-EV', '').replace('split-events-', '').replace('events-', '')
+            filename = os.path.basename(file_lst).replace('split-events-EV-', '').replace('split-events-EV', '').replace('split-events-', '').replace('events-', '')
             suffix = re.search(r'.lst\d+', filename).group()
             prefix = filename.replace(suffix, '')
             suffix = re.search(r'\d+', suffix).group()
             key_name = prefix + '-' + suffix
-            dic_list[Path(path_from, key_name)] = file_lst
+            dic_list[os.path.join(path_from, key_name)] = file_lst
 
         for stream in streams:
-            streamname = stream.name
+            streamname = os.path.basename(stream)
             suffix = re.search(r'.stream\d+', streamname).group()
             prefix = streamname.replace(suffix, '')
             suffix = re.search(r'\d+', suffix).group()
             key_name = prefix + '-' + suffix
-            dic_stream[Path(path_from, key_name)] = stream
+            dic_stream[os.path.join(path_from, key_name)] = stream
 
         mod_files_lst = dic_list.keys()
         mod_streams = dic_stream.keys()
@@ -160,43 +175,88 @@ def running(path_from, rerun):
 
                 if rerun:
                     os.chdir(os.path.dirname(k))
-                    command = "sbatch {}".format(k.name + '.sh')
+                    command = "sbatch {}".format(k + '.sh')
                     os.system(command)
 
         for k in k_inter:
             lst = dic_list[k]
-            k_lst = sum(1 for _ in open(lst, 'r') if len(_) > 0)
+            k_lst = len([line.strip() for line in open(lst, 'r').readlines() if len(line) > 0])
             stream = dic_stream[k]
             command = 'grep -ic "Image filename:" {}'.format(stream)
-            process = subprocess.run(shlex.split(command), capture_output=True, text=True)
-            k_stream = int(process.stdout.strip())
+            process = subprocess.Popen(shlex.split(command), stdout=subprocess.PIPE)
+            k_stream = int(process.communicate()[0])
 
             if k_lst != k_stream:
                 print("For {}: stream = {}, lst = {}".format(k, k_stream, k_lst))
                 success = False
                 if rerun:
                     os.chdir(os.path.dirname(k))
-                    command = "sbatch {}".format(k.name + '.sh')
+                    command = "sbatch {}".format(k + '.sh')
                     os.system(command)
 
     return True
 
-
 def ave_resolution(stream):
-    with open(stream, 'r') as f:
-        a = [float(line.split('= ')[1].split(' ')[0].rstrip("\r\n")) for line in f if "diffraction_resolution_limit" in line]
+    f = open(stream)
 
-    if not a:
-        return 0
+    a = []
+
+    while True:
+        fline = f.readline()
+        if not fline:
+            break
+        if fline.find("diffraction_resolution_limit") != -1:
+            res = float(fline.split('= ')[1].split(' ')[0].rstrip("\r\n"))
+            a.append(res)
+            continue
+
+    f.close()
 
     b = np.array(a)
     try:
-        mean_resolution = 10.0 / np.mean(b)
+        mean_resolution = 10.0/np.mean(b)
     except ValueError:
         return 0
-
     return "{:.2}".format(mean_resolution)
 
+
+
+'''
+def upload_image_to_google_drive(image_path):
+    image_url = ""
+    headers = {
+        "Authorization": TOKEN_ID
+    }
+    para = {
+        "name": os.path.basename(image_path),
+        "parents": ["1NGUAdDcPr3gocv4fAiTFxHK35c67gKGA"]
+    }
+
+    files = {
+        'data': ('metadata', json.dumps(para), 'application/json;charset=UTF-8'),
+        'file': open(image_path, 'rb')
+    }
+
+    response = requests.post(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        headers=headers,
+        files=files
+    )
+
+    if response.status_code == 200:
+        file_data = response.json()
+        file_id = file_data.get("id")
+        
+
+        # Get the URL for viewing the file in Google Drive
+        #view_url = f"https://drive.google.com/file/d/{file_id}/view"
+        image_url = f"https://drive.google.com/uc?id={file_id}" #view_url.replace('/view', '/preview')
+    else:
+        print("Error:", response.status_code, response.text)
+
+    
+    return image_url
+'''
 
 def upload_image_to_google_drive(image_path):
     image_url = ""
@@ -245,36 +305,46 @@ def upload_image_to_google_drive(image_path):
 
     return image_url
 
-
-def orientation_plot(stream_file_name, run):
-    output_filename = run.replace("/", "_")
-    markerSize = 0.5  # 2
-
-    with open(stream_file_name, 'r') as f:
-        stream = f.read()
-
-    output_path = Path(stream_file_name).parent / 'plots_res'
-    output_path.mkdir(exist_ok=True)
-    out = output_path / (output_filename + "_astars_new.png")
     
-    if not out.exists():
-        print('Plotting')
-        p = re.compile("astar = ([\+\-\d\.]* [\+\-\d\.]* [\+\-\d\.]*)")
-        xStarStrings = p.findall(stream)
-        aStars = np.array([list(map(float, x.split())) for x in xStarStrings])
+def orientation_plot(streamFileName, run):
 
+    output_filename = run.replace("/","_")
+    markerSize = 0.5 #2
+
+
+    f = open(streamFileName, 'r')
+    stream = f.read()
+    f.close()
+
+    output_path = os.path.dirname(os.path.abspath(streamFileName))  + '/plots_res'
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
+
+    print(output_path)
+    colors = ["r", "g", "b"]
+    xStarNames = ["astar","bstar","cstar"]
+    for i in np.arange(3):
+        p = re.compile(xStarNames[i] + " = ([\+\-\d\.]* [\+\-\d\.]* [\+\-\d\.]*)")
+        xStarStrings = p.findall(stream)
+
+        xStars = np.zeros((3, len(xStarStrings)), float)
+
+        for j in np.arange(len(xStarStrings)):
+            xStars[:,j] = np.array([float(s) for s in xStarStrings[j].split(' ')])
         pylab.clf()
 
         fig = pylab.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(aStars[:, 0], aStars[:, 1], aStars[:, 2], marker=".", color="r", s=markerSize)
-        pylab.title("astars")
-        
-        pylab.savefig(out)
-        pylab.close()
-    return str(out)
+        ax = Axes3D(fig)
+        ax.scatter(xStars[0,:],xStars[1,:],xStars[2,:], marker=".", color=colors[i], s=markerSize)
+        pylab.title(xStarNames[i] + "s")
 
+        out = os.path.join(output_path, output_filename + "_" + xStarNames[i])+'.png'
+        if not os.path.exists(out):
+            pylab.savefig(out)
+    pylab.close()
+    return out
 
+import math
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, float):
@@ -292,39 +362,37 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
         "https://www.googleapis.com/auth/drive.file",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_SHEETS_CREDENTIALS, scope)
+
+    creds = ServiceAccountCredentials.from_json_keyfile_name('client_secret.json', scope)
     client = gspread.authorize(creds)
 
     sheet = client.open(sheet_name).sheet1  # Open the spreadsheet
 
-    try:
-        list_of_hashes = sheet.get_all_records()
-    except gspread.GSpreadException as e:
-        print('Check your Google Sheets! There might be a duplication of the columns name!')
-        return -1
-
+    list_of_hashes = sheet.get_all_records()
+    print(list_of_hashes)
+    
+    
     google_sheet = pd.DataFrame(list_of_hashes)
-    google_runs = [str(i) for i in google_sheet['Run'].tolist() if len(str(i)) > 0]
+    google_runs = [i for i in google_sheet['Run'].tolist() if len(str(i)) > 0]
     headers = google_sheet.columns.tolist()
-
+    
+    #runs = [os.path.dirname(str(path))[len(processed_folder) + 1:] for path in Path(processed_folder).rglob('CORRECT.LP')] + [os.path.dirname(str(path))[len(processed_folder) + 1:].replace('/streams', '') for path in Path(processed_folder).rglob('*stream?*') if 'indexamajig.' not in str(path)]
+    
     runs = [
-        str(path.relative_to(processed_folder).parent).replace("\\", "/")
-        for path in Path(processed_folder).rglob('CORRECT.LP')
-        if path.exists() and 'indexamajig.' not in str(path)
-    ] + [
-        str(path.relative_to(processed_folder).parent).replace("\\", "/").replace('/streams', '')
-        for path in Path(processed_folder).rglob('*stream?*')
-        if path.exists() and 'indexamajig.' not in str(path.parent)
-    ]
-
+            os.path.dirname(str(path))[len(processed_folder) + 1:]
+            for path in Path(processed_folder).rglob('CORRECT.LP')
+            if 'indexamajig.' not in str(path.parent)
+        ] + [
+            os.path.dirname(str(path))[len(processed_folder) + 1:].replace('/streams', '')
+            for path in Path(processed_folder).rglob('*stream?*')
+            if 'indexamajig.' not in str(path.parent)
+        ]
 
     
     runs = list(set(runs))
-    runs.sort()
     print(f'Processed {len(runs)} runs')
-    
     for run in runs:
-        print(run)
+        
         if run not in google_runs:
             position = len(google_runs) + 2
             google_runs.append(run)
@@ -340,69 +408,47 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
         Number_of_indexed_crystals = 0
         method = 0
         resolution = 0
-        plot_path_pref_orientation = ''
-        plot_path_volume = ''
-        plot_path_res = ''
-        CORRECT_LP = Path(processed_folder, run, 'CORRECT.LP')
-        XDS_INP = Path(processed_folder, run, 'XDS.INP')
-        streams_path = Path(processed_folder, run, 'j_stream/*stream')
-
-        if CORRECT_LP.exists():
+        plot_path = ''
+        CORRECT_LP = os.path.join(processed_folder, run, 'CORRECT.LP')
+        XDS_INP = os.path.join(processed_folder, run, 'XDS.INP')
+        streams_path = os.path.join(processed_folder, run, 'j_stream/*stream')
+        
+        if os.path.exists(CORRECT_LP):
             method = 'rotational'
-            resolution = get_resolution(str(CORRECT_LP))
-            command = f'grep -e "DATA_RANGE=" {str(XDS_INP)}'
+            resolution = get_resolution(CORRECT_LP)
+            command = f' grep -e "DATA_RANGE=" {XDS_INP}'
             try:
-                result = subprocess.run(shlex.split(command), capture_output=True, text=True)
-                Number_of_patterns = int(result.stdout.strip().split(' ')[-1])
+                result = subprocess.check_output(shlex.split(command)).decode('utf-8').strip().split('\n')[0]
+                Number_of_patterns = int(result.split(' ')[-1])
             except subprocess.CalledProcessError:
                 pass
         else:
             method = 'serial'
-            list_of_streams = glob.glob(str(streams_path))
-            if list_of_streams:
+            list_of_streams = glob.glob(streams_path)
+            if len(list_of_streams) > 0:
                 stream = max(list_of_streams, key=os.path.getctime)
                 Number_of_patterns, Number_of_hits, Number_of_indexed_patterns, Number_of_indexed_crystals = statistic_from_streams(stream)
-                if Number_of_indexed_crystals > 10:
+                if Number_of_indexed_crystals > 0:
                     resolution = ave_resolution(stream)
-                    plot_path_pref_orientation = orientation_plot(stream, run)
-                    
-                    num_crystals_total, volume, res = window_plot_volume_res.reading_streamfile(stream)
-                    if num_crystals_total is not None:
-                        output_path = Path(stream).parent / 'plots_res'
-                        output_path.mkdir(exist_ok=True)
-                        run_name = run.replace('/','_')
-                        print(f'{output_path}/{run_name}_volume.png')
-                        plot_path_volume = window_plot_volume_res.plot_over_resolution(volume, picture_filename=f'{output_path}/{run_name}_volume.png', block_size = 4, label='UC volume, nm^3', title='Volume')
-                        plot_path_res = window_plot_volume_res.plot_over_resolution(res, picture_filename=f'{output_path}/{run_name}_res.png', block_size = 4, label='Res, A', title='Resolution')
-                    
-            elif glob.glob(str(Path(processed_folder, run, '*.lst*'))):
-                path_from = Path(processed_folder, run)
-                if running(str(path_from), rerun):
-                    files = glob.glob(str(Path(processed_folder, run, "streams/*.stream?*")))
-                    stream = str(Path(processed_folder, run, "j_stream/joined.stream"))
-                    
+                    plot_path = orientation_plot(stream, run)
+            elif len(glob.glob(os.path.join(processed_folder, run, '*.lst*'))) > 0:
+                path_from = os.path.join(processed_folder, run)
+                if running(path_from, rerun):
+                    files = glob.glob(os.path.join(processed_folder, run, "streams/*.stream?*"))
+                    stream = os.path.join(processed_folder, run, "j_stream/joined.stream")
+                    print(stream)
                     if not os.path.exists(stream):
-
+                        
                         command_line = "cat " + " ".join(files) + f' >> {stream}'
                         os.system(command_line)
                     Number_of_patterns, Number_of_hits, Number_of_indexed_patterns, Number_of_indexed_crystals = statistic_from_streams(stream)
-                    if Number_of_indexed_crystals > 10:
+                    if Number_of_indexed_crystals > 100:
                         resolution = ave_resolution(stream)
-                        plot_path_pref_orientation = orientation_plot(stream, run)
-                        num_crystals_total, volume, res = window_plot_volume_res.reading_streamfile(stream)
-                        if num_crystals_total is not None:
-                            output_path = Path(stream).parent / 'plots_res'
-                            output_path.mkdir(exist_ok=True)
-                            run_name = run.replace('/','_')
-                            print(f'{output_path}/{run_name}_volume.png')
-                            plot_path_volume = window_plot_volume_res.plot_over_resolution(volume, picture_filename=f'{output_path}/{run_name}_volume.png', block_size = 4, label='UC volume, nm^3', title='Volume')
-                            plot_path_res = window_plot_volume_res.plot_over_resolution(res, picture_filename=f'{output_path}/{run_name}_res.png', block_size = 4, label='Res, A', title='Resolution')
-                    
+                        plot_path = orientation_plot(stream, run)
                 else:
-                    print('Not processed everything')
+                    print('not processed everything')
             else:
                 print(f'No joined stream: {run}')
-
         google_sheet.loc[position, 'Method'] = method
         google_sheet.loc[position, 'Total N. of patterns'] = Number_of_patterns
         google_sheet.loc[position, 'Hits'] = Number_of_hits
@@ -410,38 +456,24 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
         google_sheet.loc[position, 'N. indexed patterns'] = Number_of_indexed_patterns
         google_sheet.loc[position, 'N. indexed crystals'] = Number_of_indexed_crystals
         google_sheet.loc[position, 'Resolution'] = str(resolution)
-        
-        if len(plot_path_pref_orientation) > 0:
-            image_url = upload_image_to_google_drive(plot_path_pref_orientation)  # Upload the plot image to Google Drive
-            google_sheet.loc[position, 'Orientation'] = f"{image_url}"
+        if len(plot_path) > 0 :
+            
+            image_url = upload_image_to_google_drive(plot_path)  # Upload the plot image to Google Drive
+            
+            google_sheet.loc[position, 'Orientation'] = f"{image_url}" #f'=IMAGE(("{image_url}"))'.replace("'=","=")
         else:
             google_sheet.loc[position, 'Orientation'] = ''
-
-        if len(plot_path_volume) > 0:
-            image_url = upload_image_to_google_drive(plot_path_volume)  # Upload the plot image to Google Drive
-            google_sheet.loc[position, 'Volume/window'] = f"{image_url}"
-        else:
-            google_sheet.loc[position, 'Volume/window'] = ''
-
-        if len(plot_path_res) > 0:
-            image_url = upload_image_to_google_drive(plot_path_res)  # Upload the plot image to Google Drive
-            google_sheet.loc[position, 'Resolution/window'] = f"{image_url}"
-        else:
-            google_sheet.loc[position, 'Resolution/window'] = ''
-            
         values = google_sheet.values.tolist()
-
+    
+        #sheet.update([headers] + values)
         # Convert the values to JSON using the custom encoder
         json_values = json.dumps(values, cls=CustomJSONEncoder)
-
+    
         sheet.update([headers] + json.loads(json_values))
-        
-
     time.sleep(25)
-
-
-GOOGLE_SHEETS_NAME = "New"  # sys.argv[1]
-PROCESSED_FOLDER = "/asap3/petra3/gpfs/p09/2023/data/11019086/processed/galchenm/processed"  # sys.argv[2]
+    
+GOOGLE_SHEETS_NAME = "Test2" #sys.argv[1] #
+PROCESSED_FOLDER = "/asap3/petra3/gpfs/p09/2023/data/11019086/processed/galchenm/processed_offline" #sys.argv[2] #
 
 while True:
-    update_google_sheet(GOOGLE_SHEETS_NAME, PROCESSED_FOLDER)
+    update_google_sheet( GOOGLE_SHEETS_NAME, PROCESSED_FOLDER)
