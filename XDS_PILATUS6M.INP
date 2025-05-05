@@ -7,15 +7,11 @@ OVERLOAD= 1048575 !#2147483647 # 2**31 - 1 one of the worst primes there is and 
 SENSOR_THICKNESS= 0.32
 NX=2463 NY=2527 QX= 0.172 QY= 0.172 ! to make CORRECT happy if frames are unavailable
 
-!ORGX= 1250.7209 ! Detector origin x coordinate
-!ORGY= 1151.3820 ! Detector origin y coordinate 
-
-!DETECTOR_DISTANCE= 221.4 !read by XYCORR, IDXREF. Negative if detector normal points to crystal.                
+!ORGX= 1254.7 ! Detector origin x coordinate
+!ORGY= 1158.2 ! Detector origin y coordinate 
 
 ORGX=$ORGX ORGY=$ORGY ! Detector origin (pixels)
-
-DETECTOR_DISTANCE= 220.73 !$DETECTOR_DISTANCE !220.9945 !$DETECTOR_DISTANCE !read by XYCORR, IDXREF. Negative if detector normal points to crystal.               
-
+DETECTOR_DISTANCE= $DETECTOR_DISTANCE !read by XYCORR, IDXREF. Negative if detector normal points to crystal.               
 
 OSCILLATION_RANGE=$OSCILLATION_RANGE
 STARTING_ANGLE= $STARTING_ANGLE                 
@@ -40,8 +36,8 @@ SPOT_RANGE=1 $NFRAMES
 MAXIMUM_NUMBER_OF_PROCESSORS=32
 MAXIMUM_NUMBER_OF_JOBS=8
 
-SPACE_GROUP_NUMBER=0 !96 - lyso                   ! 0 if unknown
-!UNIT_CELL_CONSTANTS= 79 79 38 90 90 90 ! put correct values if known
+SPACE_GROUP_NUMBER=96 !96 - lyso                   ! 0 if unknown
+UNIT_CELL_CONSTANTS= 79 79 38 90 90 90 ! put correct values if known
 INCLUDE_RESOLUTION_RANGE=50 0  ! after CORRECT, insert high resol limit; re-run CORRECT
 ! IDXREF now obeys INCLUDE_RESOLUTION_RANGE and EXCLUDE_RESOLUTION_RANGE to exclude ice-rings
 

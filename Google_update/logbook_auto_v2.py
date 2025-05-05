@@ -35,7 +35,7 @@ warnings.filterwarnings("ignore")
 GOOGLE_SHEETS_CREDENTIALS = 'client_secret.json'
 
 # Google Drive API token
-TOKEN = "..."
+TOKEN = "ya29.a0AfB_byCLSMp76Q3FylM2HwmHAGIXYcKIzoSsspqZPCjwDfx8rccIPyMc7n8_uyCgknqQKJ-HlEPl0hWm-q7lHNtRd679xWjwQCmAFGkKc0znH2E1XaMXnpQuzEZeNmVp8-ltAL7Cq5zUzTOcsD8dpcKiY6UmuEOuNPhQ24AwaCgYKAWMSARESFQHsvYls5Cxc6vIOfqHHx3x-OcbeSw0175"
 
 TOKEN_ID = f"Bearer {TOKEN}"
 
@@ -362,7 +362,7 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
             if list_of_streams:
                 stream = max(list_of_streams, key=os.path.getctime)
                 Number_of_patterns, Number_of_hits, Number_of_indexed_patterns, Number_of_indexed_crystals = statistic_from_streams(stream)
-                if Number_of_indexed_crystals > 10:
+                if Number_of_indexed_crystals > 100:
                     resolution = ave_resolution(stream)
                     plot_path_pref_orientation = orientation_plot(stream, run)
                     
@@ -386,7 +386,7 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
                         command_line = "cat " + " ".join(files) + f' >> {stream}'
                         os.system(command_line)
                     Number_of_patterns, Number_of_hits, Number_of_indexed_patterns, Number_of_indexed_crystals = statistic_from_streams(stream)
-                    if Number_of_indexed_crystals > 10:
+                    if Number_of_indexed_crystals > 100:
                         resolution = ave_resolution(stream)
                         plot_path_pref_orientation = orientation_plot(stream, run)
                         num_crystals_total, volume, res = window_plot_volume_res.reading_streamfile(stream)
@@ -440,8 +440,8 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
     time.sleep(25)
 
 
-GOOGLE_SHEETS_NAME = sys.argv[1]
-PROCESSED_FOLDER = sys.argv[2]
+GOOGLE_SHEETS_NAME = "New"  # sys.argv[1]
+PROCESSED_FOLDER = "/asap3/petra3/gpfs/p09/2023/data/11016750/processed/galchenm/processed_test"  # sys.argv[2]
 
 while True:
     update_google_sheet(GOOGLE_SHEETS_NAME, PROCESSED_FOLDER)
