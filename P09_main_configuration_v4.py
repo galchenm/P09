@@ -5,10 +5,16 @@
 """
 Example of usage:
 -offline mode
- python3 P09_main_configuration_v2.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline
+ python3 P09_main_configuration_v4.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline
+
+-offline with block of interest
+python3 P09_main_configuration_v4.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline --f /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/block_runs.lst
+
+ -offline with force feature
+ python3 P09_main_configuration_v4.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline --f /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/block_runs.lst --force
  
 -online mode 
-  python3 P09_main_configuration_v2.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml  --p /asap3/petra3/gpfs/p09/2022/data/11016565/raw/lyso/lamdatest_lyso3/rotational_001
+  python3 P09_main_configuration_v4.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml  --p /asap3/petra3/gpfs/p09/2022/data/11016565/raw/lyso/lamdatest_lyso3/rotational_001
 """
 import logging
 import yaml
@@ -35,7 +41,7 @@ import argparse
 os.nice(0)
 
 #This is needed to check the number of running/pending processes
-USER='galchenm' #'guents' #!!!PLEASE CHANGE IT!!!
+USER='galchenm' #!!!PLEASE CHANGE IT!!!
 CURRENT_PATH_OF_SCRIPT = '/asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing'  #!!!PLEASE CHANGE IT!!!
 
 class CustomFormatter(argparse.RawDescriptionHelpFormatter,
@@ -50,6 +56,10 @@ def parse_cmdline_args():
     parser.add_argument('--offline', default=False, action='store_true', help="Use this flag if you want to run this script for offline automatic data processing")
     parser.add_argument('--online', dest='offline', action='store_false', help="Use this flag if you want to run this script for online data processing per each run")
     parser.add_argument('--p', default=None, type=str, help="Use this flag and associate it with the current raw folder to process if you are using online mode per each run")
+    parser.add_argument('--f', default=None, type=str, help="Use this flag and associate it with the file with list of runs you want to reprocess, for that before use --offline attribute")
+    
+    parser.add_argument('--force', default=False, action='store_true', help="Use this flag if you want to force rerunning in the same processed folder")
+
     return parser.parse_args()
 
 
@@ -64,7 +74,7 @@ def setup_logger():
    ch.setLevel(level)
    ch.setFormatter(formatter)
    logger.addHandler(ch)
-   #logger.info("Setup logger in PID {}".format(os.getpid()))
+   logger.info("Setup logger in PID {}".format(os.getpid()))
    print("Log file is {}".format(os.path.join(os.getcwd(), log_file)))
 
 
@@ -132,7 +142,7 @@ def serial_start(
               folder_with_raw_data, current_data_processing_folder
               ):
     global configuration
-    
+    global is_force
     #ORGX and ORGY are the origing of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
     ORGY = configuration['crystallography']['ORGY']
@@ -146,6 +156,7 @@ def serial_start(
     command_for_processing_serial = configuration['crystallography']['command_for_processing_serial']
     data_h5path = configuration['crystallography']['data_h5path'] 
     #logger = logging.getLogger('app')
+    
     command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_serial} {geometry_filename_template} {cell_file} {data_h5path}'
     ##logger.info(f'INFO: Execute {command}')
     os.system(command)
@@ -154,6 +165,7 @@ def xds_start(
               folder_with_raw_data, current_data_processing_folder
               ):
     global configuration
+    global is_force
     
     #ORGX and ORGY are the origing of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
@@ -164,7 +176,7 @@ def xds_start(
     
     command_for_processing_rotational = configuration['crystallography']['command_for_processing_rotational']
     XDS_INP_template = configuration['crystallography']['XDS_INP_template']
-                  
+    
     #logger = logging.getLogger('app')
     command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_rotational} {XDS_INP_template}'
     ##logger.info(f'INFO: Execute {command}')
@@ -173,6 +185,8 @@ def xds_start(
 
 def main(root):
     global configuration
+    global is_force
+    
     print(f'We are here: {root}')
     raw_directory = configuration['crystallography']['raw_directory']
     processed_directory = configuration['crystallography']['processed_directory']
@@ -181,8 +195,10 @@ def main(root):
     #ATTENTION! Here I'm checking the existance of info.txt file, if there is none or this file is empty, folder will not be processed!!!
     #So for serial method we also require this file. Generally it is needed to fill the geometry template for data processing
     files =  [f for f in os.listdir(root) if os.path.isfile(os.path.join(root, f))]
-    
-    if any([(file == 'info.txt' and os.stat(os.path.join(root,'info.txt')).st_size != 0) for file in files]):
+    other_files = [file for file in os.listdir(root) if os.path.isfile(os.path.join(root, file))]
+    #print(other_files)
+    #print(len(other_files))
+    if any([(file == 'info.txt' and os.stat(os.path.join(root,'info.txt')).st_size != 0) for file in files]) and len(other_files)>1:
         
         info_txt = glob.glob(os.path.join(root,'info.txt'))[0]
         
@@ -203,6 +219,20 @@ def main(root):
         #check how many processes are pending in order not to submit
         pending_command = f'squeue -u {USER} -t pending'
         number_of_pending_processes = subprocess.check_output(shlex.split(pending_command)).decode('utf-8').strip().split('\n')
+        
+        if is_force and os.path.exists(os.path.join(current_data_processing_folder, 'flag.txt')):
+            
+            for filename in os.listdir(current_data_processing_folder):
+                file_path = os.path.join(current_data_processing_folder, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print('Failed to delete %s. Reason: %s' % (file_path, e))
+            print(f'In {current_data_processing_folder} we delete the previous processed results')            
+        
         if (
                 os.path.exists(os.path.join(current_data_processing_folder, 'flag.txt')) or\
                 len(number_of_pending_processes) > 100 or \
@@ -269,6 +299,10 @@ if __name__ == "__main__":
     #reading configuration file
     args = parse_cmdline_args()
     configuration_file = args.i if args.i is not None else f'{CURRENT_PATH_OF_SCRIPT}/configuration.yaml'
+    is_force = args.force
+    
+    print('is_force = ', is_force)
+    
     
     with open(configuration_file,'r') as file:
         configuration = yaml.safe_load(file)
@@ -278,21 +312,21 @@ if __name__ == "__main__":
     converted_directory = configuration['crystallography']['converted_directory']
     
     
-    #logger.info(f"Configuration: {configuration}")
+    logger.info(f"Configuration: {configuration}")
     
     if not os.path.exists(converted_directory):
         '''
         If the folder for converted images generated by Lambda detector doesn't exist,
         create it
         '''
-        os.mkdir(converted_directory)    
+        os.makedirs(converted_directory)    
     
     if not os.path.exists(processed_directory):
         '''
         If the folder for processing doesn't exist,
         create it
         '''
-        os.mkdir(processed_directory)     
+        os.makedirs(processed_directory)     
     
     
     while True: #wait while the directory with raw data appeared
@@ -300,11 +334,29 @@ if __name__ == "__main__":
             break
     
     if args.offline:
-        while True: #main cycle for inspection folders and running data processing
+        to_process = []
+        filename = args.f
+        if filename is not None:
+            with open(filename, 'r') as file:
+                for line in file:
+                    line = line.strip()
+                    if len(line) > 0 and line not in to_process: 
+                        to_process.append(line)
+            
+
             for root, dirs, files in os.walk(raw_directory):
-                main(root)
-                
-            time.sleep(2)
+                for pattern in to_process:
+                    
+                    if pattern in root[len(raw_directory):]:
+                        print(root)
+                        main(root)
+        else:
+            while True: #main cycle for inspection folders and running data processing
+                for root, dirs, files in os.walk(raw_directory):
+                    main(root)
+                    print(root)
+                    
+                time.sleep(2)
     else:
         if args.p is None:
             print('ERROR: YOU HAVE TO GIVE THE ABSOLUTE PATH TO THE RAW FOLDER YOU ARE GOING TO PROCESS IF YOU ARE IN THIS MODE!')
