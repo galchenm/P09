@@ -1,15 +1,15 @@
 crystallography:
-    XDS_INP_template: "/asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing/XDS_PILATUS6M.INP"
-    ORGX: 1255.3
-    ORGY: 1152.9
-    DISTANCE_OFFSET: 0 # [mm]
+    XDS_INP_template: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/XDS_PILATUS6M.INP"
+    ORGX: 1254.7 
+    ORGY: 1158.2
+    DISTANCE_OFFSET: 4 # [mm]
     command_for_processing_rotational: "xds_par" 
-    command_for_processing_serial: "/asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing/turbo-index-p09"
-    raw_directory: "/asap3/petra3/gpfs/p09/2024/data/11020444/raw"
-    converted_directory: "/asap3/petra3/gpfs/p09/2024/data/11020444/processed/galchenm/convert"
-    processed_directory: "/asap3/petra3/gpfs/p09/2024/data/11020444/processed/galchenm/mosflm_wo_cell_processing"
-    geometry_for_conversion: "/asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing/lambda1M5_80mm_v5_grid.geom"
-    geometry_for_processing: "/asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing/pilatus6M_220mm.geom"
+    command_for_processing_serial: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/turbo-index-p09"
+    raw_directory: "/asap3/petra3/gpfs/p09/2023/data/11016750/raw"
+    converted_directory: "/asap3/petra3/gpfs/p09/2023/data/11016750/processed/galchenm/convert2"
+    processed_directory: "/asap3/petra3/gpfs/p09/2023/data/11016750/processed/galchenm/processed_test2"
+    geometry_for_conversion: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/lambda1M5_80mm_v5_grid.geom"
+    geometry_for_processing: "/gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/pilatus6M_219mm.geom"
     data_h5path: "/entry/instrument/detector/data"
     cell_file: "None"
     

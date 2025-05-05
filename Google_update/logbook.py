@@ -167,8 +167,8 @@ def update_sheets():
         
         google_sheet.fillna('', inplace=True)
     
-    sheet.update([google_sheet.columns.values.tolist()] + google_sheet.values.tolist())
-    time.sleep(5)
+        sheet.update([google_sheet.columns.values.tolist()] + google_sheet.values.tolist())
+    time.sleep(1)
     
 while True:
     update_sheets()
