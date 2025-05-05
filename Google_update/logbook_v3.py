@@ -31,7 +31,7 @@ import json
 import requests
 
 #https://developers.google.com/oauthplayground/?code=4/0AZEOvhUeNxyActECL1J6m-W1-33jebxIpR1VRHFKlJEM6VVsEDxZMNvFAX_XAh9iXKKYkw&scope=https://www.googleapis.com/auth/drive
-token="..."
+token="ya29.a0AbVbY6P-7vTKL9w8kfg8HlCH9avNfBsJphHe1-2EjIqxBbHVZqGGvpQkY_mn0CX8OxU4zQTainxbC6DTHTaaB1Km6telME1gHw41xQnpfy-McQQ8xhSR3HnkGmoJ990IUkYN4ynqipYp5WMGr3jRNLwO4nD6aCgYKAZ4SARESFQFWKvPlYK5Jo5a4Mo4EEPhMrl74kg0163"
 TOKEN_ID=f"Bearer {token}"
 
 def statistic_from_streams(stream):

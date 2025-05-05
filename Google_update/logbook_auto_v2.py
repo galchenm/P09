@@ -440,8 +440,8 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
     time.sleep(25)
 
 
-GOOGLE_SHEETS_NAME = sys.argv[1]
-PROCESSED_FOLDER = sys.argv[2]
+GOOGLE_SHEETS_NAME = "New"  # sys.argv[1]
+PROCESSED_FOLDER = "/asap3/petra3/gpfs/p09/2023/data/11019086/processed/galchenm/processed"  # sys.argv[2]
 
 while True:
     update_google_sheet(GOOGLE_SHEETS_NAME, PROCESSED_FOLDER)
