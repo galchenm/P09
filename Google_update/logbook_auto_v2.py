@@ -35,7 +35,7 @@ warnings.filterwarnings("ignore")
 GOOGLE_SHEETS_CREDENTIALS = 'client_secret.json'
 
 # Google Drive API token
-TOKEN = "ya29.a0AfB_byCLK3f5dFXj1JGrdiIwrkMF_5IoTV5uhuR55OnqFBQMg-1B5_RDou8MAiD0ZzR4MmNmEkWGZu-OIHGhcpczz9NKPAOQxVVyufcD9IZU8ZbvNd0inD-r6jm2kF3-dfPn0z52F7ROlqn6eeE4hC4GP0vOkxmjbhnGaCgYKATASARESFQGOcNnCHu-DAhBCcfdAvybNOwzy3w0171"
+TOKEN = "..."
 
 TOKEN_ID = f"Bearer {TOKEN}"
 
