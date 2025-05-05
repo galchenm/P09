@@ -68,7 +68,7 @@ split -a 3 -d -l $SPLIT list_cbf.lst events-${NAME1}.lst
 
 for FILE in events-${NAME1}.lst*; do
 
-    NAME=`echo $FILE | sed -e "s/events-${NAME1}.lst/${NAME1}-/"`
+    NAME=`echo $FILE | sed -e "s/events-${NAME1}.lst/${NAME1}/"`
 #    STREAM=`echo $FILE | sed -e "s/split-events-${RUN}.lst/${RUN}.stream/"`
     #STREAM=${NAME}.stream
     STREAM=`echo $FILE | sed -e "s/events-${NAME1}.lst/${NAME1}.stream/"`
@@ -77,7 +77,7 @@ for FILE in events-${NAME1}.lst*; do
     echo "#!/bin/sh" > $SLURMFILE
     echo >> $SLURMFILE
 
-    echo "#SBATCH --partition=allcpu,upex" >> $SLURMFILE  # Set your partition here
+    echo "#SBATCH --partition=allcpu,upex,short" >> $SLURMFILE  # Set your partition here
 #    echo "#SBATCH --partition=cfel,cfel-cdi,short,upex,all" >> $SLURMFILE  # Set your partition here
     echo "#SBATCH --time=4:00:00" >> $SLURMFILE
 #    echo "#SBATCH --exclude=max-exfl094,max-exfl095,max-exfl096,max-exfl049,max-exfl047,max-exfl048,max-exfl024,max-exfl036,max-exfl037,max-exfl022,max-exfl082,max-exfl085,max-exfl142,max-exfl200" >> $SLURMFILE
@@ -105,8 +105,10 @@ for FILE in events-${NAME1}.lst*; do
     command="indexamajig -i $FILE -o $STREAMDIR/$STREAM"
     command="$command -j 80 -g $GEOM --int-radius=3,6,8"
     #command="$command --peaks=peakfinder8 --min-snr=6 --min-res=10 --max-res=2000 --threshold=20 --min-pix-count=2 --max-pix-count=50 --min-peaks=20 --local-bg-radius=3"
-    command="$command --peaks=peakfinder8 --min-snr=8 --min-res=10 --max-res=500 --threshold=5 --min-pix-count=2 --max-pix-count=10 --min-peaks=15 --local-bg-radius=3"
-	command="$command --indexing=mosflm-latt-nocell --no-check-cell"
+    #command="$command --indexing=mosflm-latt-nocell --no-check-cell --multi"
+	command="$command --peaks=peakfinder8 --min-snr=8 --min-res=10 --max-res=1200 --threshold=5 --min-pix-count=1 --max-pix-count=10 --min-peaks=15 --local-bg-radius=3"
+    command="$command --indexing=mosflm-latt-nocell --no-check-cell --multi"
+    #command="$command --indexing=xgandalf --no-cell-combinations --multi --tolerance=2,1.6,0.6,1.5" 
 #	command="$command --indexing=xgandalf --no-cell-combinations --multi -p $PDB"
 	#command="$command --indexing=mosflm-latt-nocell --multi -p $PDB"
 	#command="$command --indexing=mosflm-latt-nocell --multi"

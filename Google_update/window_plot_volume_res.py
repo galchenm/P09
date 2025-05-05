@@ -16,14 +16,14 @@ import sys
 #
 
 scan_types = [
-                "left-to-right top-down",  # number_of_pattern = index_line * NUM_PORES_PER_LINE + index_pore
-                "right-to-left top-down",  # number_of_pattern = (index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1
-                "snake start top-left",    # number_of_pattern = (index_line * NUM_PORES_PER_LINE + index_pore) if index_line%2 == 0 else ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1)
-                "snake start top-right",   # number_of_pattern = ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1) if index_line%2 == 0 else (index_line * NUM_PORES_PER_LINE + index_pore)
-                "left-to-right bottom-up", # number_of_pattern = TOTAL_NUMBER_OF_PORES - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1)
-                "right-to-left bottom-up", # number_of_pattern = TOTAL_NUMBER_OF_PORES - (index_line * NUM_PORES_PER_LINE + index_pore) 
-                "snake start bottom-left", # number_of_pattern = TOTAL_NUMBER_OF_PORES - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1) if index_line%2 == 0 else (TOTAL_NUMBER_OF_PORES - (index_line * NUM_PORES_PER_LINE + index_pore))
-                "snake start bottom-right" # number_of_pattern = (TOTAL_NUMBER_OF_PORES - (index_line * NUM_PORES_PER_LINE + index_pore)) if index_line%2 == 0 else (TOTAL_NUMBER_OF_PORES - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1))
+                "left-to-right top-down",  # num_pattern = index_line * NUM_PORES_PER_LINE + index_pore
+                "right-to-left top-down",  # num_pattern = (index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1
+                "snake start top-left",    # num_pattern = (index_line * NUM_PORES_PER_LINE + index_pore) if index_line%2 == 0 else ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1)
+                "snake start top-right",   # num_pattern = ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1) if index_line%2 == 0 else (index_line * NUM_PORES_PER_LINE + index_pore)
+                "left-to-right bottom-up", # num_pattern = TOTAL_NUMBER_OF_PORES - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1)
+                "right-to-left bottom-up", # num_pattern = TOTAL_NUMBER_OF_PORES - (index_line * NUM_PORES_PER_LINE + index_pore) 
+                "snake start bottom-left", # num_pattern = TOTAL_NUMBER_OF_PORES - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1) if index_line%2 == 0 else (TOTAL_NUMBER_OF_PORES - (index_line * NUM_PORES_PER_LINE + index_pore))
+                "snake start bottom-right" # num_pattern = (TOTAL_NUMBER_OF_PORES - (index_line * NUM_PORES_PER_LINE + index_pore)) if index_line%2 == 0 else (TOTAL_NUMBER_OF_PORES - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1))
              ]
 
 
@@ -69,39 +69,39 @@ def calculate_indices_left_to_right_bottom_up(number_of_pattern, NUM_PORES_PER_L
     TOTAL_NUMBER = NUM_LINES_PER_WINDOW * NUM_PORES_PER_LINE - 1
     for index_line in range(NUM_LINES_PER_WINDOW):
         for index_pore in range(NUM_PORES_PER_LINE):
-            calculated_number_of_pattern = TOTAL_NUMBER - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1)
-            if calculated_number_of_pattern == number_of_pattern:
+            calculated_num_pattern = TOTAL_NUMBER - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1)
+            if calculated_num_pattern == num_pattern:
                 return index_line, index_pore
     return None, None
 
 def calculate_indices_right_to_left_bottom_up(number_of_pattern, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW):
     TOTAL_NUMBER = NUM_LINES_PER_WINDOW * NUM_PORES_PER_LINE - 1
-    return (TOTAL_NUMBER_OF_PORES - number_of_pattern)//NUM_PORES_PER_LINE, (TOTAL_NUMBER_OF_PORES - number_of_pattern)%NUM_PORES_PER_LINE
+    return (TOTAL_NUMBER_OF_PORES - num_pattern)//NUM_PORES_PER_LINE, (TOTAL_NUMBER_OF_PORES - num_pattern)%NUM_PORES_PER_LINE
 
 def calculate_indices_left_to_right_top_down(number_of_pattern, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW):
-    return number_of_pattern//NUM_PORES_PER_LINE, number_of_pattern%NUM_PORES_PER_LINE
+    return num_pattern//NUM_PORES_PER_LINE, num_pattern%NUM_PORES_PER_LINE
 
 def calculate_indices_right_to_left_top_down(number_of_pattern, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW):
     for index_line in range(NUM_LINES_PER_WINDOW):
         for index_pore in range(NUM_PORES_PER_LINE):
-            calculated_number_of_pattern = (index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1
-            if calculated_number_of_pattern == number_of_pattern:
+            calculated_num_pattern = (index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1
+            if calculated_num_pattern == num_pattern:
                 return index_line, index_pore
     return None, None
 
 def calculate_indices_right_to_left_top_down(number_of_pattern, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW):
     for index_line in range(NUM_LINES_PER_WINDOW):
         for index_pore in range(NUM_PORES_PER_LINE):
-            calculated_number_of_pattern = (index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1
-            if calculated_number_of_pattern == number_of_pattern:
+            calculated_num_pattern = (index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1
+            if calculated_num_pattern == num_pattern:
                 return index_line, index_pore
     return None, None
 
 def calculate_indices_snake_start_top_left(number_of_pattern, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW):
     for index_line in range(NUM_LINES_PER_WINDOW):
         for index_pore in range(NUM_PORES_PER_LINE):
-            calculated_number_of_pattern = (index_line * NUM_PORES_PER_LINE + index_pore) if index_line%2 == 0 else ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1)
-            if calculated_number_of_pattern == number_of_pattern:
+            calculated_num_pattern = (index_line * NUM_PORES_PER_LINE + index_pore) if index_line%2 == 0 else ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1)
+            if calculated_num_pattern == num_pattern:
                 return index_line, index_pore
     return None, None
 
@@ -109,24 +109,24 @@ def calculate_indices_snake_start_bottom_left(number_of_pattern, NUM_PORES_PER_L
     TOTAL_NUMBER = NUM_LINES_PER_WINDOW * NUM_PORES_PER_LINE - 1
     for index_line in range(NUM_LINES_PER_WINDOW):
         for index_pore in range(NUM_PORES_PER_LINE):
-            calculated_number_of_pattern = TOTAL_NUMBER - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1) if index_line%2 == 0 else (TOTAL_NUMBER - (index_line * NUM_PORES_PER_LINE + index_pore))
-            if calculated_number_of_pattern == number_of_pattern:
+            calculated_num_pattern = TOTAL_NUMBER - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1) if index_line%2 == 0 else (TOTAL_NUMBER - (index_line * NUM_PORES_PER_LINE + index_pore))
+            if calculated_num_pattern == num_pattern:
                 return index_line, index_pore
     return None, None
 
 def calculate_indices_snake_start_top_right(number_of_pattern, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW):
     for index_line in range(NUM_LINES_PER_WINDOW):
         for index_pore in range(NUM_PORES_PER_LINE):
-            calculated_number_of_pattern = ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1) if index_line%2 == 0 else (index_line * NUM_PORES_PER_LINE + index_pore)
-            if calculated_number_of_pattern == number_of_pattern:
+            calculated_num_pattern = ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1) if index_line%2 == 0 else (index_line * NUM_PORES_PER_LINE + index_pore)
+            if calculated_num_pattern == num_pattern:
                 return index_line, index_pore
     return None, None
 
 def calculate_indices_snake_start_bottom_right(number_of_pattern, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW):
     for index_line in range(NUM_LINES_PER_WINDOW):
         for index_pore in range(NUM_PORES_PER_LINE):
-            calculated_number_of_pattern = (TOTAL_NUMBER - (index_line * NUM_PORES_PER_LINE + index_pore)) if index_line%2 == 0 else (TOTAL_NUMBER - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1))
-            if calculated_number_of_pattern == number_of_pattern:
+            calculated_num_pattern = (TOTAL_NUMBER - (index_line * NUM_PORES_PER_LINE + index_pore)) if index_line%2 == 0 else (TOTAL_NUMBER - ((index_line + 1) * NUM_PORES_PER_LINE - index_pore - 1))
+            if calculated_num_pattern == num_pattern:
                 return index_line, index_pore
     return None, None
 
@@ -157,7 +157,7 @@ def get_id_line_id_pores_from_filename(raw_filename, extension='cbf'):
     
     pattern_number = int(re.search(fr'\d+.{extension}', os.path.basename(raw_filename)).group().split('.')[0])
     
-    return  d_scan_types_for_id_line_id_pore[scan_type](pattern_number, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW)   
+    return  d_scan_types_for_id_line_id_pore[scan_type](pattern_number)   
 
 def calculate_number_of_pattern_left_to_right_bottom_up(index_line, index_pore, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW):
     TOTAL_NUMBER = NUM_LINES_PER_WINDOW * NUM_PORES_PER_LINE - 1
@@ -227,9 +227,8 @@ def obtain_coordinates_for_current_folder(path_dir, extension='cbf'):
     
     min_LINES_IDX = min(LINES_IDX)
     
-    
     for index_line in LINES_IDX:
-        dict_line_info[index_line] = {}
+        dict_line_info[index_line-min_LINES_IDX] = {}
         for index_pore in range(NUM_PORES_PER_LINE):
             
             number_of_pattern = d_scan_types_for_calculate_number_of_pattern[scan_type](index_line - min_LINES_IDX, index_pore, NUM_PORES_PER_LINE, NUM_LINES_PER_WINDOW)
@@ -237,7 +236,7 @@ def obtain_coordinates_for_current_folder(path_dir, extension='cbf'):
             filename = re.sub('\?\?\?\?\?', "%05d" % number_of_pattern, template_file_name)
             
             if os.path.exists(filename):
-                dict_line_info[index_line][index_pore] = filename
+                dict_line_info[index_line-min_LINES_IDX][index_pore] = filename
     return dict_line_info
 
 def generate_value_pairs(dictionary):
@@ -306,7 +305,7 @@ def reading_streamfile(stream_filename):
     return num_crystals_total, volume, res
 
     
-def plot_over_resolution(data, picture_filename='foo.png', block_size = 4, label='UC volume, nm^3', title='Volume'):
+def plot_over_resolution(data, vmin=None, vmax=None, picture_filename='foo.png', block_size = 4, label='UC volume, nm^3', title='Volume'):
     # Determine the block dimensions (block_size x block_size)
     
     block_rows = data.shape[0] // block_size
@@ -316,14 +315,23 @@ def plot_over_resolution(data, picture_filename='foo.png', block_size = 4, label
     block_data_means = data[:block_rows * block_size, :block_cols * block_size].reshape(block_rows, block_size, block_cols, block_size).mean(axis=(1, 3))
 
     # Determine the min and max values of 'block_data_means' for setting color levels
-    vmin = np.nanmin(block_data_means)
-    vmax = np.nanmax(block_data_means)
+    vmin = np.nanmin(block_data_means) if vmin is None else vmin
+    vmax = np.nanmax(block_data_means) if vmax is None else vmax
 
+    # create a colormap object
+
+    cmap = plt.get_cmap('viridis')
+    cmap.set_under('white')
+
+    # set colourbar map
+    cmap_args = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+    
+    
     # Create the plot with a size of 16x16
     plt.figure(figsize=(16, 16))
 
     # Plot the spatial distribution of volume
-    plt.imshow(block_data_means, cmap='viridis', aspect='auto', origin='lower', vmin=vmin, vmax=vmax)
+    plt.imshow(block_data_means, **cmap_args, aspect='auto', origin='lower')
     plt.colorbar(label=label)
 
     plt.title(f'Spatial Distribution of {title} (Averaged in {block_size}x{block_size} Bins)')

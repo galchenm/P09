@@ -26,12 +26,32 @@ from pydrive.drive import GoogleDrive
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+
 import urllib.parse
 import json
 import requests
 
-#https://developers.google.com/oauthplayground/?code=4/0AZEOvhUeNxyActECL1J6m-W1-33jebxIpR1VRHFKlJEM6VVsEDxZMNvFAX_XAh9iXKKYkw&scope=https://www.googleapis.com/auth/drive
-token="..."
+# https://developers.google.com/oauthplayground/?code=4/0AZEOvhUeNxyActECL1J6m-W1-33jebxIpR1VRHFKlJEM6VVsEDxZMNvFAX_XAh9iXKKYkw&scope=https://www.googleapis.com/auth/drive
+# token will expire every 3599s, so you have to update it
+# click the link above
+# then 1 step - find Drive Google v3 - click on the row - then select https://www.googleapis.com/auth/drive
+# accept everything and allow everything
+# then 2 step - click on the blue button with Exchange authorization code for tokens
+# and then on the right part of the web page with the name Request / Response
+# scroll down and you will see something like this with different valuse
+#{
+#  "access_token": "ya29.a0AbVbY6P-7vTKL9w8kfg8HlCH9avNfBsJphHe1-2EjIqxBbHVZqGGvpQkY_mn0CX8OxU4zQTainxbC6DTHTaaB1Km6telME1gHw41xQnpfy-McQQ8xhSR3HnkGmoJ990IUkYN4ynqipYp5WMGr3jRNLwO4nD6aCgYKAZ4SARESFQFWKvPlYK5Jo5a4Mo4EEPhMrl74kg0163", 
+#  "scope": "https://www.googleapis.com/auth/drive", 
+#  "token_type": "Bearer", 
+#  "expires_in": 3599, 
+#  "refresh_token": "1//04ZZOTY54nZLFCgYIARAAGAQSNwF-L9Ir1U5qF2ffkjq-NPLUd2JvdV7TRu83u-onOFL0jFQp1whfRrcYRqkmmMvaKAsfrgOKO-0"
+#}
+# Then copy the access_token (the right part with "" - here it is "ya29.a0AbVbY6P..")
+# and put it into token varuable here (below)
+# then execute the script as
+# module load maxwell python/3.10 crystfel
+# python3 logbook_v3.py
+token= "ya29.a0AfB_byCDKwoF0Eov7OX5b7WRmmSdcMvGsepcn7ZxxrHxKQ6bZnHN0aWcwuB-stEYMKBKM3K-AbRgBpEYBqWoas9PHhdknrY3Upo_WTpQkuGwPypTjtxaWJennr1enRTyjXOldgUSrTy_houF2QVPSEPMTgtkcI1mQckeaCgYKAQESARESFQGOcNnCsR70LAy2B1FwB55Lc_Vdtw0171"
 TOKEN_ID=f"Bearer {token}"
 
 def statistic_from_streams(stream):
@@ -200,6 +220,7 @@ def ave_resolution(stream):
     return "{:.2}".format(mean_resolution)
 
 
+
 '''
 def upload_image_to_google_drive(image_path):
     image_url = ""
@@ -284,8 +305,7 @@ def upload_image_to_google_drive(image_path):
 
     return image_url
 
-
- 
+    
 def orientation_plot(streamFileName, run):
 
     output_filename = run.replace("/","_")
@@ -349,6 +369,9 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
     sheet = client.open(sheet_name).sheet1  # Open the spreadsheet
 
     list_of_hashes = sheet.get_all_records()
+    print(list_of_hashes)
+    
+    
     google_sheet = pd.DataFrame(list_of_hashes)
     google_runs = [i for i in google_sheet['Run'].tolist() if len(str(i)) > 0]
     headers = google_sheet.columns.tolist()
@@ -369,7 +392,7 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
     runs = list(set(runs))
     print(f'Processed {len(runs)} runs')
     for run in runs:
-        print(run)
+        
         if run not in google_runs:
             position = len(google_runs) + 2
             google_runs.append(run)
@@ -414,17 +437,18 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
                     files = glob.glob(os.path.join(processed_folder, run, "streams/*.stream?*"))
                     stream = os.path.join(processed_folder, run, "j_stream/joined.stream")
                     print(stream)
-                    command_line = "cat " + " ".join(files) + f' >> {stream}'
-                    os.system(command_line)
+                    if not os.path.exists(stream):
+                        
+                        command_line = "cat " + " ".join(files) + f' >> {stream}'
+                        os.system(command_line)
                     Number_of_patterns, Number_of_hits, Number_of_indexed_patterns, Number_of_indexed_crystals = statistic_from_streams(stream)
-                    if Number_of_indexed_crystals > 0:
+                    if Number_of_indexed_crystals > 100:
                         resolution = ave_resolution(stream)
                         plot_path = orientation_plot(stream, run)
                 else:
                     print('not processed everything')
             else:
                 print(f'No joined stream: {run}')
-        print(method)
         google_sheet.loc[position, 'Method'] = method
         google_sheet.loc[position, 'Total N. of patterns'] = Number_of_patterns
         google_sheet.loc[position, 'Hits'] = Number_of_hits
@@ -448,6 +472,8 @@ def update_google_sheet(sheet_name, processed_folder, rerun=False):
         sheet.update([headers] + json.loads(json_values))
     time.sleep(25)
     
+GOOGLE_SHEETS_NAME = "Test2" #sys.argv[1] #
+PROCESSED_FOLDER = "/asap3/petra3/gpfs/p09/2023/data/11019086/processed/galchenm/processed_offline" #sys.argv[2] #
 
 while True:
-    update_google_sheet("Test2", "/asap3/petra3/gpfs/p09/2023/data/11016750/processed/galchenm/processed_test")
+    update_google_sheet( GOOGLE_SHEETS_NAME, PROCESSED_FOLDER)
