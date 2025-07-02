@@ -103,8 +103,8 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, geome
             cell_file = re.search(r'cell_file:\s*(\S+)', result).group(1)
         template_data = {
             "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
-            "ORGX": ORGX,
-            "ORGY": ORGY,
+            "ORGX": (-1)*ORGX,
+            "ORGY": (-1)*ORGY,
             "PHOTON_ENERGY": PHOTON_ENERGY,
             "data_h5path": data_h5path
         }

@@ -1,5 +1,4 @@
 crystallography:
-    XDS_INP_template: "/gpfs/comon/scripts/XDS_PILATUS6M.INP"
     BEAMTIMEID: $beamtimeID
     RESERVED_NODE: $reservedNode
     USERNAME: $username

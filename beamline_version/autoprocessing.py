@@ -5,16 +5,16 @@
 """
 Example of usage:
 -offline mode
- python3 P09_main_configuration_v4.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline
+ python3 autoprocessing.py -i configuration.yaml --offline
 
 -offline with block of interest
-python3 P09_main_configuration_v4.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline --f /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/block_runs.lst
+python3 autoprocessing.py -i configuration.yaml --offline --f block_runs.lst
 
  -offline with force feature
- python3 P09_main_configuration_v4.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml --offline --f /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/block_runs.lst --force
+ python3 autoprocessing.py -i configuration.yaml --offline --f block_runs.lst --force
  
 -online mode 
-  python3 P09_main_configuration_v4.py -i /gpfs/cfel/group/cxi/scratch/2020/EXFEL-2019-Schmidt-Mar-p002450/scratch/galchenm/scripts_for_work/REGAE_dev/om/src/testing/configuration.yaml  --p /asap3/petra3/gpfs/p09/2022/data/11016565/raw/lyso/lamdatest_lyso3/rotational_001
+  python3 autoprocessing.py -i configuration.yaml  --p /asap3/petra3/gpfs/p09/2022/data/11016565/raw/lyso/lamdatest_lyso3/rotational_001
 """
 import logging
 import yaml
@@ -41,22 +41,21 @@ import argparse
 os.nice(0)
 
 #This is needed to check the number of running/pending processes
-USER='galchenm' #!!!PLEASE CHANGE IT!!!
-CURRENT_PATH_OF_SCRIPT = '/asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing'  #!!!PLEASE CHANGE IT!!!
+CURRENT_PATH_OF_SCRIPT = os.path.abspath(__file__)
 
 class CustomFormatter(argparse.RawDescriptionHelpFormatter,
-                      argparse.ArgumentDefaultsHelpFormatter):
+                    argparse.ArgumentDefaultsHelpFormatter):
     pass
 
 def parse_cmdline_args():
     parser = argparse.ArgumentParser(
         description=sys.modules[__name__].__doc__,
         formatter_class=CustomFormatter)
-    parser.add_argument('-i', type=str, help="The full path to configuration file")
+    parser.add_argument('-config','--config', type=str, help="The full path to configuration file")
     parser.add_argument('--offline', default=False, action='store_true', help="Use this flag if you want to run this script for offline automatic data processing")
     parser.add_argument('--online', dest='offline', action='store_false', help="Use this flag if you want to run this script for online data processing per each run")
-    parser.add_argument('--p', default=None, type=str, help="Use this flag and associate it with the current raw folder to process if you are using online mode per each run")
-    parser.add_argument('--f', default=None, type=str, help="Use this flag and associate it with the file with list of runs you want to reprocess, for that before use --offline attribute")
+    parser.add_argument('--path', default=None, type=str, help="Use this flag and associate it with the current raw folder to process if you are using online mode per each run")
+    parser.add_argument('--blocks', default=None, type=str, help="Use this flag and associate it with the file with list of runs you want to reprocess, for that before use --offline attribute")
     
     parser.add_argument('--force', default=False, action='store_true', help="Use this flag if you want to force rerunning in the same processed folder")
 
@@ -167,6 +166,9 @@ def xds_start(
     global configuration
     global is_force
     
+    USER = configuration['crystallography']['USERNAME']
+    RESERVED_NODE = configuration['crystallography']['RESERVED_NODE']
+    
     #ORGX and ORGY are the origing of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
     ORGY = configuration['crystallography']['ORGY']
@@ -177,9 +179,9 @@ def xds_start(
     command_for_processing_rotational = configuration['crystallography']['command_for_processing_rotational']
     XDS_INP_template = configuration['crystallography']['XDS_INP_template']
     
-    #logger = logging.getLogger('app')
+    logger = logging.getLogger('app')
     command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_rotational} {XDS_INP_template}'
-    ##logger.info(f'INFO: Execute {command}')
+    logger.info(f'INFO: Execute {command}')
     os.system(command)
 
 
@@ -196,8 +198,7 @@ def main(root):
     #So for serial method we also require this file. Generally it is needed to fill the geometry template for data processing
     files =  [f for f in os.listdir(root) if os.path.isfile(os.path.join(root, f))]
     other_files = [file for file in os.listdir(root) if os.path.isfile(os.path.join(root, file))]
-    #print(other_files)
-    #print(len(other_files))
+
     if any([(file == 'info.txt' and os.stat(os.path.join(root,'info.txt')).st_size != 0) for file in files]) and len(other_files)>1:
         
         info_txt = glob.glob(os.path.join(root,'info.txt'))[0]
@@ -208,13 +209,13 @@ def main(root):
             experiment_method = next(f)
         experiment_method = experiment_method.split(':')[-1].strip()
         
-        
         current_data_processing_folder = f'{processed_directory}{root[len(raw_directory):]}'
-        ##logger.info(f'current_data_processing_folder ({experiment_method} method): {current_data_processing_folder}')
+        logger.info(f'current_data_processing_folder ({experiment_method} method): {current_data_processing_folder}')
         
         #create the same subfolder structure for processing as in raw folder
         if not os.path.exists(current_data_processing_folder):
             os.makedirs(current_data_processing_folder, exist_ok=True)
+            os.chmod(current_data_processing_folder, 0o777)
         
         #check how many processes are pending in order not to submit
         pending_command = f'squeue -u {USER} -t pending'
@@ -247,7 +248,7 @@ def main(root):
             os.path.exists(os.path.join(current_data_processing_folder, 'flag.txt')) - this file indicates that we already tried to process this folder (doesn't mean successfully
             '''
             
-            print(f'{current_data_processing_folder} is skipped')
+            logger.info(f'{current_data_processing_folder} is skipped')
             
         
         elif(
@@ -260,57 +261,114 @@ def main(root):
             '''
             
             os.makedirs(f"{converted_directory}{root[len(raw_directory):]}", exist_ok=True)
-            print(f"CONVERTED: {converted_directory}{root[len(raw_directory):]}")
+            os.chmod(f"{converted_directory}{root[len(raw_directory):]}", 0o777)
+            logger.info(f"CONVERTED: {converted_directory}{root[len(raw_directory):]}")
             
             converter_start(root, f"{converted_directory}{root[len(raw_directory):]}",\
                             current_data_processing_folder, experiment_method)
         elif (
                 any([file.endswith(".nxs") for file in files]) and \
                 os.path.exists(f"{converted_directory}{root[len(raw_directory):]}")
-             ): 
+            ): 
             
             #No conversion, just running xds for converted files
             if experiment_method == 'rotational':
-                print(f"XDS: {converted_directory}{root[len(raw_directory):]}")
+                logger.info(f"XDS: {converted_directory}{root[len(raw_directory):]}")
                 
                 xds_start(f"{converted_directory}{root[len(raw_directory):]}", current_data_processing_folder)
             else: #serial
-                print(f"SERIAL: {converted_directory}{root[len(raw_directory):]}")
+                logger.info(f"SERIAL: {converted_directory}{root[len(raw_directory):]}")
                 
                 serial_start(f"{converted_directory}{root[len(raw_directory):]}", current_data_processing_folder)
         else:
             
             if experiment_method == 'rotational':
-                print(f'XDS: {root}')
+                logger.info(f'XDS: {root}')
                 
                 xds_start(root, current_data_processing_folder)
             else: #serial
-                print(f'SERIAL: {root}')
+                logger.info(f'SERIAL: {root}')
                 
                 serial_start(root, current_data_processing_folder)
     else:
-        print(f"In {root} there is no info.txt file.")
+        logger.info(f"In {root} there is no info.txt file.")
         pass
 
+def filling_configuration_file(configuration_file_template, json_beamtime_file=None):
+    """
+    Fills a YAML configuration template using selected values from a JSON beamtime file.
+
+    Parameters:
+    - json_beamtime_file (str): Path to the JSON file containing beamtime data.
+    - configuration_file_template (str): Path to the YAML template file with placeholders.
+
+    Returns:
+    - str: Path to the generated filled YAML file.
+    """
+
+    with open(configuration_file_template, "r") as f:
+        template_text = f.read()
+        
+    templates_folder = os.path.join(CURRENT_PATH_OF_SCRIPT, 'templates')
+    
+    
+    if json_beamtime_file is not None:
+        with open(json_beamtime_file, "r") as f:
+            beamtime_data = json.load(f)
+        
+        
+        values = {
+            "beamtimeID": beamtime_data.get("beamtimeID", ""),
+            "username": beamtime_data.get("username", ""),
+            "reservedNode": beamtime_data.get("reserved_node", ""),
+            "XDS_INP_template": os.path.join(templates_folder, 'XDS.INP')
+            "geometry_for_conversion": os.path.join(templates_folder, 'lambda1M5.geom')
+            "geometry_for_processing": os.path.join(templates_folder, 'pilatus6M.geom')
+        
+        }
+    else:
+        values = {
+            "XDS_INP_template": os.path.join(templates_folder, 'XDS.INP')
+            "geometry_for_conversion": os.path.join(templates_folder, 'lambda1M5.geom')
+            "geometry_for_processing": os.path.join(templates_folder, 'pilatus6M.geom')
+        
+        }
+    
+    filled_template = Template(template_text).safe_substitute(values)
+
+    output_file = os.path.join(f"/gpfs/current/processed/filled_config.yaml")
+    with open(output_file, "w") as f:
+        f.write(filled_template)
+
+    print(f"Generated file: {output_file}")
+    return output_file
+
+# Setup logger
 setup_logger()
 
 if __name__ == "__main__":
     logger = logging.getLogger('app')
     #reading configuration file
     args = parse_cmdline_args()
-    configuration_file = args.i if args.i is not None else f'{CURRENT_PATH_OF_SCRIPT}/configuration.yaml'
+    configuration_file = args.config if args.config is not None else f'{CURRENT_PATH_OF_SCRIPT}/templates/configuration_template.yaml'
+    
+    #If the configuration file is a template, we fill it with values from the beamtime JSON file
+    json_beamtime_file = os.path.join(os.getcwd(), 'beamtime.json')
+    if not os.path.exists(json_beamtime_file):
+        print(f"ERROR: The beamtime JSON file {json_beamtime_file} does not exist.")
+        
+        
+    configuration_file = filling_configuration_file(configuration_file, json_beamtime_file) 
+    
     is_force = args.force
-    
-    print('is_force = ', is_force)
-    
-    
+
     with open(configuration_file,'r') as file:
         configuration = yaml.safe_load(file)
     
     raw_directory = configuration['crystallography']['raw_directory']
     processed_directory = configuration['crystallography']['processed_directory']
     converted_directory = configuration['crystallography']['converted_directory']
-    
+    USER = configuration['crystallography']['USERNAME']
     
     logger.info(f"Configuration: {configuration}")
     
@@ -319,14 +377,16 @@ if __name__ == "__main__":
         If the folder for converted images generated by Lambda detector doesn't exist,
         create it
         '''
-        os.makedirs(converted_directory)    
+        os.makedirs(converted_directory)
+        os.chmod(converted_directory, 0o777)    
     
     if not os.path.exists(processed_directory):
         '''
         If the folder for processing doesn't exist,
         create it
         '''
-        os.makedirs(processed_directory)     
+        os.makedirs(processed_directory)
+        os.chmod(processed_directory, 0o777)     
     
     
     while True: #wait while the directory with raw data appeared
@@ -335,9 +395,9 @@ if __name__ == "__main__":
     
     if args.offline:
         to_process = []
-        filename = args.f
-        if filename is not None:
-            with open(filename, 'r') as file:
+        blocks_of_files = args.blocks
+        if blocks_of_files is not None:
+            with open(blocks_of_files, 'r') as file:
                 for line in file:
                     line = line.strip()
                     if len(line) > 0 and line not in to_process: 
@@ -348,17 +408,17 @@ if __name__ == "__main__":
                 for pattern in to_process:
                     
                     if pattern in root[len(raw_directory):]:
-                        print(root)
                         main(root)
+                        logger.info(f'INFO: Processed {root}')
         else:
             while True: #main cycle for inspection folders and running data processing
                 for root, dirs, files in os.walk(raw_directory):
                     main(root)
-                    print(root)
-                    
+                    logger.info(f'INFO: Processed {root}')
                 time.sleep(2)
     else:
-        if args.p is None:
-            print('ERROR: YOU HAVE TO GIVE THE ABSOLUTE PATH TO THE RAW FOLDER YOU ARE GOING TO PROCESS IF YOU ARE IN THIS MODE!')
+        if args.path is None:
+            logger.error('ERROR: YOU HAVE TO GIVE THE ABSOLUTE PATH TO THE RAW FOLDER YOU ARE GOING TO PROCESS IF YOU ARE IN THIS MODE!')
         else:
-            main(args.p)
+            main(args.path)
+            logger.info(f'INFO: Processed {args.path}')
