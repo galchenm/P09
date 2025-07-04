@@ -92,6 +92,7 @@ def serial_start(
     # Extracting parameters from the configuration
     USER = configuration['USER']
     RESERVED_NODE = configuration['reservedNodes']
+    SLURM_PARTITION = configuration['slurmPartition']
     sshPrivateKeyPath =  configuration["sshPrivateKeyPath"]
     sshPublicKeyPath =  configuration["sshPublicKeyPath"]
     ORGX = configuration['crystallography']['ORGX']
@@ -105,10 +106,10 @@ def serial_start(
     
     command_for_processing_serial = configuration['crystallography']['command_for_processing_serial']
     data_h5path = configuration['crystallography']['data_h5path'] 
-    
-    
-    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_serial} {geometry_filename_template} {cell_file} {data_h5path} {USER} {RESERVED_NODE} {sshPrivateKeyPath} {sshPublicKeyPath}'
-    
+
+
+    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_serial} {geometry_filename_template} {cell_file} {data_h5path} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
+
     os.system(command)
     
 def xds_start(
@@ -121,6 +122,7 @@ def xds_start(
     # Extracting parameters from the configuration
     USER = configuration['USER']
     RESERVED_NODE = configuration['crystallography']['RESERVED_NODE']
+    SLURM_PARTITION = configuration['slurmPartition']
     
     #ORGX and ORGY are the origin of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
@@ -133,7 +135,7 @@ def xds_start(
     XDS_INP_template = configuration['crystallography']['XDS_INP_template']
     
     logger = logging.getLogger('app')
-    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_rotational} {XDS_INP_template}'
+    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_rotational} {XDS_INP_template} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
     logger.info(f'INFO: Execute {command}')
     os.system(command)
 
@@ -216,6 +218,7 @@ def find_and_parse_metadata(base_path):
     Returns:
         dict: A dictionary containing the beamtimeId, reservedNodes, sshPrivateKeyPath,
         beamtimeId: 11016750
+        "slurmPartition": "ponline_p09"
         reservedNodes: 'max-p3a020'
         sshPrivateKeyPath: shared/id_rsa
         sshPublicKeyPath: shared/id_rsa.pub
@@ -243,7 +246,8 @@ def find_and_parse_metadata(base_path):
                     "sshPrivateKeyPath": online.get("sshPrivateKeyPath"),
                     "sshPublicKeyPath": online.get("sshPublicKeyPath"),
                     "userAccount": online.get("userAccount"),
-                    "file": json_file 
+                    "file": json_file,
+                    "slurmPartition": online.get("slurmPartition")
                 }
                 return result 
 
@@ -342,13 +346,14 @@ if __name__ == "__main__":
     sshPrivateKeyPath = result_parsed_metadata['sshPrivateKeyPath']
     sshPublicKeyPath = result_parsed_metadata['sshPublicKeyPath']
     USER = result_parsed_metadata['userAccount'] if args.u is None else args.u
-    
+    slurmPartition = result_parsed_metadata['slurmPartition'] 
     configuration.update({
     "beamtimeId": beamtimeId,
     "reservedNodes": reservedNodes,
     "sshPrivateKeyPath": sshPrivateKeyPath,
     "sshPublicKeyPath": sshPublicKeyPath,
-    "USER": USER
+    "USER": USER,
+    "slurmPartition": slurmPartition,
     })
     
     logger.info(f"Configuration: {configuration}")

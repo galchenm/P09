@@ -16,7 +16,7 @@ os.nice(0)
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                             command_for_data_processing, cell_file,
-                            USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath):
+                            USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
 
     job_name = Path(current_data_processing_folder).name
     job_file = Path(current_data_processing_folder) / f"{job_name}_serial.sh"
@@ -29,7 +29,8 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
             "#!/bin/sh\n",
             login_line + "\n",
             f"#SBATCH --job-name={job_name}\n",
-            f"#SBATCH --partition={RESERVED_NODE}\n",
+            f"#SBATCH --partition={SLURM_PARTITION}\n",
+            f"#SBATCH --reservation={RESERVED_NODE}\n",
             "#SBATCH --nodes=1\n",
             f"#SBATCH --output={out_file}\n",
             f"#SBATCH --error={err_file}\n",
@@ -127,7 +128,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder,
     serial_data_processing(
         folder_with_raw_data, current_data_processing_folder,
         command_for_data_processing, cell_file,
-        USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath
+        USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath
     )
 
 
@@ -151,6 +152,7 @@ def main():
         data_h5path,
         USER,
         RESERVED_NODE,
+        SLURM_PARTITION,
         sshPrivateKeyPath,
         sshPublicKeyPath
     ) = args[:13]

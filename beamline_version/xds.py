@@ -14,20 +14,21 @@ from pathlib import Path
 os.nice(0)
 
 def xds_start(current_data_processing_folder, command_for_data_processing,
-              USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath):
-    
+                USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
+
     job_name = Path(current_data_processing_folder).name
     job_file = Path(current_data_processing_folder) / f"{job_name}_XDS.sh"
     err_file = Path(current_data_processing_folder) / f"{job_name}_XDS.err"
     out_file = Path(current_data_processing_folder) / f"{job_name}_XDS.out"
 
     if "maxwell" not in RESERVED_NODE:
-        login_line = f"ssh -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
+        login_line = f"ssh -l {USER} -i {sshPrivateKeyPath}"
         sbatch_file = [
             "#!/bin/sh\n",
             login_line + "\n",
             f"#SBATCH --job-name={job_name}\n",
-            f"#SBATCH --partition={RESERVED_NODE}\n",
+            f"#SBATCH --partition={SLURM_PARTITION}\n",
+            f"#SBATCH --reservation={RESERVED_NODE}\n",
             "#SBATCH --nodes=1\n",
             f"#SBATCH --output={out_file}\n",
             f"#SBATCH --error={err_file}\n",
@@ -114,7 +115,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
     os.remove(current_data_processing_folder / 'template.INP')
 
     xds_start(current_data_processing_folder, command_for_data_processing,
-            USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath)
+            USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
 
 
 # --- MAIN ---
@@ -126,7 +127,7 @@ if __name__ == "__main__":
     DISTANCE_OFFSET = float(sys.argv[5])
     command_for_data_processing = sys.argv[6]
     XDS_INP_template = sys.argv[7]
-    USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath = sys.argv[8:12]
+    USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath = sys.argv[8:13]
 
     ORGX *= -1
     ORGY *= -1
