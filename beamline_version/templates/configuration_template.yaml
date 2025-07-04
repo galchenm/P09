@@ -1,7 +1,4 @@
 crystallography:
-    BEAMTIMEID: $beamtimeID
-    RESERVED_NODE: $reservedNode
-    USERNAME: $username
     ORGX: "None"
     ORGY: "None"
     DISTANCE_OFFSET: 0 # [mm]

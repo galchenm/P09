@@ -14,54 +14,33 @@ from string import Template
 os.nice(0)
 
 
-def geometry_fill_template_for_serial(current_data_processing_folder):
-    global information
-
-    os.chdir(current_data_processing_folder)
-
-    geometry_filename_template = information["crystallography"]["geometry_for_processing"]
-    shutil.copy(geometry_filename_template, os.path.join(current_data_processing_folder, 'template.geom'))
-
-    DETECTOR_DISTANCE = (
-        information['crystallography']['DETECTOR_DISTANCE']
-        + information['crystallography']['DISTANCE_OFFSET']
-    )
-
-    ORGX = -1 * information['crystallography']['ORGX']
-    ORGY = -1 * information['crystallography']['ORGY']
-    PHOTON_ENERGY = information['crystallography']['energy']
-    data_h5path = information['crystallography']['data_h5path']
-
-    template_data = {
-        "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
-        "ORGX": ORGX,
-        "ORGY": ORGY,
-        "PHOTON_ENERGY": PHOTON_ENERGY,
-        "data_h5path": data_h5path
-    }
-
-    geometry_filename = 'geometry.geom'
-    with open(os.path.join(current_data_processing_folder, 'template.geom'), 'r') as f:
-        src = Template(f.read())
-    with open(geometry_filename, 'w') as monitor_file:
-        result = src.substitute(template_data)
-        monitor_file.write(result)
-
-    os.remove(os.path.join(current_data_processing_folder, 'template.geom'))
-
-
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
-                           command_for_data_processing, cell_file):
+                            command_for_data_processing, cell_file,
+                            USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath):
 
-    job_name = current_data_processing_folder.split("/")[-1]
-    job_file = os.path.join(current_data_processing_folder, f"{job_name}_serial.sh")
-    err_file = os.path.join(current_data_processing_folder, f"{job_name}_serial.err")
-    out_file = os.path.join(current_data_processing_folder, f"{job_name}_serial.out")
+    job_name = Path(current_data_processing_folder).name
+    job_file = Path(current_data_processing_folder) / f"{job_name}_serial.sh"
+    err_file = Path(current_data_processing_folder) / f"{job_name}_serial.err"
+    out_file = Path(current_data_processing_folder) / f"{job_name}_serial.out"
 
-    with open(job_file, 'w+') as fh:
-        fh.writelines([
+    if "maxwell" not in RESERVED_NODE:
+        login_line = f"ssh -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
+        sbatch_file = [
             "#!/bin/sh\n",
-            f"#SBATCH --job={job_file}\n",
+            login_line + "\n",
+            f"#SBATCH --job-name={job_name}\n",
+            f"#SBATCH --partition={RESERVED_NODE}\n",
+            "#SBATCH --nodes=1\n",
+            f"#SBATCH --output={out_file}\n",
+            f"#SBATCH --error={err_file}\n",
+            "source /etc/profile.d/modules.sh\n",
+            "module load maxwell xray crystfel\n",
+            f"{command_for_data_processing} {folder_with_raw_data} {current_data_processing_folder} {cell_file}\n"
+        ]
+    else:
+        sbatch_file = [
+            "#!/bin/sh\n",
+            f"#SBATCH --job-name={job_name}\n",
             "#SBATCH --partition=allcpu\n",
             "#SBATCH --time=12:00:00\n",
             "#SBATCH --nodes=1\n",
@@ -72,81 +51,136 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
             "source /etc/profile.d/modules.sh\n",
             "module load xray maxwell crystfel\n",
             f"{command_for_data_processing} {folder_with_raw_data} {current_data_processing_folder} {cell_file}\n"
-        ])
+        ]
 
-    os.system(f"sbatch {job_file}")
+    with open(job_file, 'w') as fh:
+        fh.writelines(sbatch_file)
+
+    os.chmod(job_file, 0o755)
+
+    if shutil.which("sbatch"):
+        os.system(f"sbatch {job_file}")
+    else:
+        print("Error: sbatch command not found. Job not submitted.")
 
 
-def filling_template(folder_with_raw_data, current_data_processing_folder, geometry_filename_template, data_h5path,\
-                    ORGX=0, ORGY=0, DISTANCE_OFFSET=0, command_for_data_processing='turbo-index-P09', cell_file=None):
+def extract_value_from_info(info_path, key, fallback=0, is_float=True):
+    try:
+        with open(info_path) as f:
+            lines = f.readlines()
+        for line in lines:
+            if key in line:
+                match = re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?", line)
+                if match:
+                    return float(match.group()) if is_float else int(float(match.group()))
+    except Exception:
+        pass
+    return fallback
+
+def filling_template(folder_with_raw_data, current_data_processing_folder,
+                    geometry_filename_template, data_h5path,
+                    ORGX=0, ORGY=0, DISTANCE_OFFSET=0,
+                    command_for_data_processing='turbo-index-P09', cell_file=None,
+                    USER=None, RESERVED_NODE=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
+    """Fills the geometry template with parameters extracted from info.txt and prepares for data processing."""
+    
     os.chdir(current_data_processing_folder)
-    shutil.copy(geometry_filename_template, os.path.join(current_data_processing_folder, 'template.geom'))
+    template_geom_path = Path(current_data_processing_folder) / 'template.geom'
+    shutil.copy(geometry_filename_template, template_geom_path)
 
-    info_txt = ''
-    info_path = os.path.join(folder_with_raw_data, 'info.txt')
-    if os.path.exists(info_path) and os.stat(info_path).st_size != 0:
-        info_txt = info_path
+    info_path = Path(folder_with_raw_data) / 'info.txt'
+    if not info_path.exists() or info_path.stat().st_size == 0:
+        print(f"No valid info.txt found in {folder_with_raw_data}")
+        return
 
-        result = subprocess.check_output(shlex.split(f'grep -e "distance" {info_txt}')).decode('utf-8').strip().split('\n')[0]
-        DETECTOR_DISTANCE = (float(re.search(r'\d+\.\d+', result).group(0)) + DISTANCE_OFFSET) / 1000
-        if ORGX == 0:
-            result = subprocess.check_output(shlex.split(f'grep -e "ORGX" {info_txt}')).decode('utf-8').strip().split('\n')[0]
-            ORGX = float(re.search(r'\d+\.\d+', result).group(0))
-        if ORGY == 0:
-            result = subprocess.check_output(shlex.split(f'grep -e "ORGY" {info_txt}')).decode('utf-8').strip().split('\n')[0]
-            ORGY = float(re.search(r'\d+\.\d+', result).group(0))
-        result = subprocess.check_output(shlex.split(f'grep -e "wavelength" {info_txt}')).decode('utf-8').strip().split('\n')[0]
-        WAVELENGTH = float(re.search(r'\d+\.\d+', result).group(0))
-        PHOTON_ENERGY = 12400 / WAVELENGTH
-        if cell_file == "None":
-            result = subprocess.check_output(shlex.split(f'grep -e "wavelength" {info_txt}')).decode('utf-8').strip().split('\n')[0]
-            cell_file = re.search(r'cell_file:\s*(\S+)', result).group(1)
-        template_data = {
-            "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
-            "ORGX": (-1)*ORGX,
-            "ORGY": (-1)*ORGY,
-            "PHOTON_ENERGY": PHOTON_ENERGY,
-            "data_h5path": data_h5path
-        }
+    with open(info_path) as f:
+        content = f.read()
 
-        with open(os.path.join(current_data_processing_folder, 'template.geom'), 'r') as f:
-            src = Template(f.read())
-        with open('geometry.geom', 'w') as monitor_file:
-            result = src.substitute(template_data)
-            monitor_file.write(result)
+    DETECTOR_DISTANCE = extract_value_from_info(info_path, "distance") + DISTANCE_OFFSET
+    ORGX = ORGX or extract_value_from_info(info_path, "ORGX")
+    ORGY = ORGY or extract_value_from_info(info_path, "ORGY")
+    NFRAMES = extract_value_from_info(info_path, "frames", fallback=1, is_float=False)
+    STARTING_ANGLE = extract_value_from_info(info_path, "start angle")
+    OSCILLATION_RANGE = extract_value_from_info(info_path, "degrees/frame")
+    WAVELENGTH = extract_value_from_info(info_path, "wavelength")
+    PHOTON_ENERGY = 12400 / WAVELENGTH
 
-        os.remove(os.path.join(current_data_processing_folder, 'template.geom'))
+    if (not cell_file or cell_file == "None") and cell_file_match:
+        cell_file = cell_file_match.group(1)
 
-        serial_data_processing(folder_with_raw_data, current_data_processing_folder,
-                            command_for_data_processing, cell_file)
+    template_data = {
+        "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
+        "ORGX": -ORGX,
+        "ORGY": -ORGY,
+        "PHOTON_ENERGY": PHOTON_ENERGY,
+        "data_h5path": data_h5path
+    }
+
+    with open(template_geom_path, 'r') as f:
+        src = Template(f.read())
+
+    with open('geometry.geom', 'w') as monitor_file:
+        monitor_file.write(src.substitute(template_data))
+
+    template_geom_path.unlink()
+
+    serial_data_processing(
+        folder_with_raw_data, current_data_processing_folder,
+        command_for_data_processing, cell_file,
+        USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath
+    )
 
 
-# CLI Argument Handling
-folder_with_raw_data = sys.argv[1]
-current_data_processing_folder = sys.argv[2]
+def main():
+    """Main function to handle command line arguments and initiate data processing."""
+    # CLI Argument Handling
+    args = sys.argv[1:]
+    if len(args) != 14:
+        print(f"Expected 14 arguments, got {len(args)}")
+        sys.exit(1)
 
-ORGX = sys.argv[3] if sys.argv[3] != "None" else 0
-ORGX = (-1) * float(ORGX)  # Convert to negative as per
+    (
+        folder_with_raw_data,
+        current_data_processing_folder,
+        ORGX,
+        ORGY,
+        DISTANCE_OFFSET,
+        command_for_data_processing,
+        geometry_filename_template,
+        cell_file,
+        data_h5path,
+        USER,
+        RESERVED_NODE,
+        sshPrivateKeyPath,
+        sshPublicKeyPath
+    ) = args[:13]
 
-ORGY = sys.argv[4] if sys.argv[4] != "None" else 0
-ORGY = (-1) * float(ORGY)  # Convert to negative as per
+    ORGX = float(ORGX) if ORGX != "None" else 0
+    ORGY = float(ORGY) if ORGY != "None" else 0
+    DISTANCE_OFFSET = float(DISTANCE_OFFSET)
+    if cell_file == "None":
+        cell_file = None
 
-DISTANCE_OFFSET = float(sys.argv[5])
-command_for_data_processing = sys.argv[6]
-geometry_filename_template = sys.argv[7]            
-cell_file = sys.argv[8] 
-data_h5path = sys.argv[9] 
+    filling_template(
+        folder_with_raw_data,
+        current_data_processing_folder,
+        geometry_filename_template,
+        data_h5path,
+        ORGX,
+        ORGY,
+        DISTANCE_OFFSET,
+        command_for_data_processing,
+        cell_file,
+        USER,
+        RESERVED_NODE,
+        sshPrivateKeyPath,
+        sshPublicKeyPath
+    )
 
-if cell_file == "None":
-    cell_file = ""
+    # Create flag file
+    flag_file = Path(current_data_processing_folder) / 'flag.txt'
+    flag_file.touch(exist_ok=True)
 
-filling_template(
-                        folder_with_raw_data, current_data_processing_folder, geometry_filename_template, data_h5path,\
-                        ORGX, ORGY, DISTANCE_OFFSET, command_for_data_processing, cell_file
-                    )
-# Create flag file
-flag_file = os.path.join(current_data_processing_folder, 'flag.txt')
-try:
-    open(flag_file, 'a').close()
-except OSError:
-    pass
+
+if __name__ == '__main__':
+    main()

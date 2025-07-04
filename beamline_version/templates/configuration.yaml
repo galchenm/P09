@@ -1,7 +1,4 @@
 crystallography:
-    BEAMTIMEID: "None"
-    RESERVED_NODE: "None"
-    USERNAME: "None"
     ORGX: 1255.3
     ORGY: 1152.9
     DISTANCE_OFFSET: 0 # [mm]

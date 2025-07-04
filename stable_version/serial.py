@@ -27,36 +27,6 @@ import shlex
 
 os.nice(0)
 
-def geometry_fill_template_for_serial(current_data_processing_folder):
-    global information
-    
-    os.chdir(current_data_processing_folder)
-    
-    geometry_filename_template = information["crystallography"]["geometry_for_processing"]
-    
-    shutil.copy(geometry_filename_template, os.path.join(current_data_processing_folder, 'template.geom'))
-    
-    DETECTOR_DISTANCE = information['crystallography']['DETECTOR_DISTANCE'] + information['crystallography']['DISTANCE_OFFSET'] 
-    
-    ORGX = (-1)*information['crystallography']['ORGX']
-    ORGY = (-1)*information['crystallography']['ORGY']
-    PHOTON_ENERGY = information['crystallography']['energy']
-    data_h5path = information['crystallography']['data_h5path']
-    
-    template_data = {
-                        "DETECTOR_DISTANCE":DETECTOR_DISTANCE, "ORGX":ORGX, "ORGY":ORGY,\
-                        "PHOTON_ENERGY":PHOTON_ENERGY, "data_h5path": data_h5path
-                    }
-    geometry_filename = 'geometry.geom'
-    monitor_file = open(geometry_filename, 'w')
-    with open(os.path.join(current_data_processing_folder,'template.geom'), 'r') as f:
-        src = Template(f.read())
-        result = src.substitute(template_data)
-        monitor_file.write(result)
-    monitor_file.close()
-    os.remove(os.path.join(current_data_processing_folder, 'template.geom'))
-    
-    
 def serial_data_processing(
                             folder_with_raw_data, current_data_processing_folder,\
                             command_for_data_processing, cell_file
