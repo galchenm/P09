@@ -64,25 +64,36 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
     else:
         print("Error: sbatch command not found. Job not submitted.")
 
+import re
 
-def extract_value_from_info(info_path, key, fallback=0, is_float=True):
+def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_string=False):
+    if fallback is None:
+        fallback = "" if is_string else 0
+
     try:
         with open(info_path) as f:
             lines = f.readlines()
         for line in lines:
             if key in line:
-                match = re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?", line)
-                if match:
-                    return float(match.group()) if is_float else int(float(match.group()))
+                if is_string:
+                    # Get value after the first colon, trim whitespace
+                    return line.split(":", 1)[-1].strip()
+                else:
+                    match = re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?", line)
+                    if match:
+                        return float(match.group()) if is_float else int(float(match.group()))
     except Exception:
         pass
+
     return fallback
+
+
 
 def filling_template(folder_with_raw_data, current_data_processing_folder,
                     geometry_filename_template, data_h5path,
                     ORGX=0, ORGY=0, DISTANCE_OFFSET=0,
                     command_for_data_processing='turbo-index-P09', cell_file=None,
-                    USER=None, RESERVED_NODE=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
+                    USER=None, RESERVED_NODE=None, SLURM_PARTITION=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
     """Fills the geometry template with parameters extracted from info.txt and prepares for data processing."""
     
     os.chdir(current_data_processing_folder)
@@ -105,9 +116,8 @@ def filling_template(folder_with_raw_data, current_data_processing_folder,
     OSCILLATION_RANGE = extract_value_from_info(info_path, "degrees/frame")
     WAVELENGTH = extract_value_from_info(info_path, "wavelength")
     PHOTON_ENERGY = 12400 / WAVELENGTH
-
-    if (not cell_file or cell_file == "None") and cell_file_match:
-        cell_file = cell_file_match.group(1)
+    
+    cell_file = cell_file or extract_value_from_info(info_path, "cell_file", fallback="", is_string=True)
 
     template_data = {
         "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
@@ -135,7 +145,9 @@ def filling_template(folder_with_raw_data, current_data_processing_folder,
 def main():
     """Main function to handle command line arguments and initiate data processing."""
     # CLI Argument Handling
+    print("sys.argv=", sys.argv)
     args = sys.argv[1:]
+    
     if len(args) != 14:
         print(f"Expected 14 arguments, got {len(args)}")
         sys.exit(1)
@@ -155,7 +167,7 @@ def main():
         SLURM_PARTITION,
         sshPrivateKeyPath,
         sshPublicKeyPath
-    ) = args[:13]
+    ) = args[:]
 
     ORGX = float(ORGX) if ORGX != "None" else 0
     ORGY = float(ORGY) if ORGY != "None" else 0
@@ -175,6 +187,7 @@ def main():
         cell_file,
         USER,
         RESERVED_NODE,
+        SLURM_PARTITION,
         sshPrivateKeyPath,
         sshPublicKeyPath
     )

@@ -129,9 +129,6 @@ if __name__ == "__main__":
     XDS_INP_template = sys.argv[7]
     USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath = sys.argv[8:13]
 
-    ORGX *= -1
-    ORGY *= -1
-
     res = [
         os.path.join(folder_with_raw_data, file)
         for file in os.listdir(folder_with_raw_data)
