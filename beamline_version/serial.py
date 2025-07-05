@@ -22,7 +22,99 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
     job_file = Path(current_data_processing_folder) / f"{job_name}_serial.sh"
     err_file = Path(current_data_processing_folder) / f"{job_name}_serial.err"
     out_file = Path(current_data_processing_folder) / f"{job_name}_serial.out"
+    
+    raw = folder_with_raw_data
+    proc = current_data_processing_folder
+    pdb = cell_file if cell_file else ""
+    
 
+    geom = "geometry.geom"
+    split_lines = 250
+
+    os.chdir(proc)
+    os.chmod(proc, 0o777)
+    
+    # Create directories
+    stream_dir = Path("streams")
+    error_dir = Path("error")
+    joined_stream_dir = Path("j_stream")
+    for d in [stream_dir, error_dir, joined_stream_dir]:
+        d.mkdir(exist_ok=True)
+
+    name1 = Path(proc).name
+    print(name1)
+
+    # Load modules
+    subprocess.run("source /etc/profile.d/modules.sh && module load maxwell xray crystfel", shell=True, executable='/bin/bash')
+
+    # Find files
+    list_h5 = "list_h5.lst"
+    list_cbf = "list_cbf.lst"
+    with open(list_h5, "w") as f:
+        subprocess.run(f"find {raw} -name '*.h5' | sort", shell=True, stdout=f)
+    with open(list_cbf, "w") as f:
+        subprocess.run(f"find {raw} -name '*.cbf' | sort", shell=True, stdout=f)
+
+    # Determine filetype
+    filetype = 0
+    if os.path.getsize(list_h5) > 0:
+        print("Found h5 files")
+        filetype = 1
+
+    if os.path.getsize(list_cbf) > 0:
+        print("Found cbf files")
+        filetype = 2
+
+    if filetype == 0:
+        print("No .h5 or .cbf files found in the raw folder. Exiting.")
+        sys.exit(0)
+
+    # Convert list if necessary
+    if filetype == 1:
+        subprocess.run(f"list_events -i {list_h5} -g {geom} -o {list_cbf}", shell=True)
+
+    # Split input file
+    split_prefix = f"events-{name1}.lst"
+    subprocess.run(f"split -a 3 -d -l {split_lines} {list_cbf} {split_prefix}", shell=True)
+    
+        # Create and submit SLURM jobs
+    for split_file in sorted(Path(".").glob(f"{split_prefix}*")):
+        suffix = split_file.name.replace(f"events-{name1}.lst", "")
+        name = f"{name1}{suffix}"
+        stream = f"{name1}.stream{suffix}"
+        slurmfile = f"{name}.sh"
+
+        with open(slurmfile, "w") as f:
+            if "maxwell" not in RESERVED_NODE:
+                login_line = f"ssh -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
+                f.write(f"#!/bin/sh\n{login_line}\n")
+                f.write(f"#SBATCH --job-name={name}\n")
+                f.write(f"#SBATCH --partition={SLURM_PARTITION}\n")
+                f.write(f"#SBATCH --reservation={RESERVED_NODE}\n")
+            else:
+                f.write("#!/bin/sh\n")
+                f.write(f"#SBATCH --job-name={name}\n")
+                f.write("#SBATCH --partition=allcpu,upex,short\n")
+                f.write("#SBATCH --time=4:00:00\n")
+                f.write("#SBATCH --nodes=1\n")
+                f.write("#SBATCH --nice=100\n")
+                f.write("#SBATCH --mem=500000\n")
+                    f.write(f"#SBATCH --job-name  {name}\n")
+            f.write(f"#SBATCH --output    {error_dir}/{name}-%N-%j.out\n")
+            f.write(f"#SBATCH --error     {error_dir}/{name}-%N-%j.err\n\n")
+            f.write("source /etc/profile.d/modules.sh\n")
+            f.write("module load maxwell xray crystfel\n\n")
+
+            command = f"indexamajig -i {split_file.name} -o {stream_dir}/{stream} -j 80 -g {geom} --int-radius=3,6,8"
+            command += " --peaks=peakfinder8 --min-snr=8 --min-res=10 --max-res=1200 --threshold=5"
+            command += " --min-pix-count=1 --max-pix-count=10 --min-peaks=15 --local-bg-radius=3"
+            command += " --indexing=mosflm-latt-nocell --no-check-cell --multi"
+            if pdb:
+                command += f" -p {pdb}"
+            f.write(f"{command}\n")
+
+        subprocess.run(f"sbatch {slurmfile}", shell=True)        
+    """
     if "maxwell" not in RESERVED_NODE:
         login_line = f"ssh -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
         sbatch_file = [
@@ -63,9 +155,8 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
         os.system(f"sbatch {job_file}")
     else:
         print("Error: sbatch command not found. Job not submitted.")
-
-import re
-
+    """
+    
 def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_string=False):
     if fallback is None:
         fallback = "" if is_string else 0
