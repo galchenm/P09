@@ -90,7 +90,7 @@ def serial_start(
             is_maxwell
             ):
     """Starts the serial data processing for the given raw data folder."""
-    print("Start serial data processing...")
+    
     # Extracting parameters from the configuration
     USER = configuration['USER']
     RESERVED_NODE = configuration['reservedNodes'] if not is_maxwell else "maxwell"
@@ -109,7 +109,6 @@ def serial_start(
     command_for_processing_serial = configuration['crystallography']['command_for_processing_serial']
     data_h5path = configuration['crystallography']['data_h5path'] 
 
-    print(111)
     command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_serial} {geometry_filename_template} {cell_file} {data_h5path} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
 
     os.system(command)
@@ -122,7 +121,7 @@ def xds_start(
             is_maxwell
             ):
     """Starts the XDS data processing for the given raw data folder."""
-    print("Start rotational data processing...")
+    
     # Extracting parameters from the configuration
     USER = configuration['USER']
     RESERVED_NODE = configuration['RESERVED_NODE'] if not is_maxwell else "maxwell"
@@ -137,8 +136,7 @@ def xds_start(
     
     command_for_processing_rotational = configuration['crystallography']['command_for_processing_rotational']
     XDS_INP_template = configuration['crystallography']['XDS_INP_template']
-    print(138)
-    print()
+
     logger = logging.getLogger('app')
     command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_rotational} {XDS_INP_template} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
     logger.info(f'INFO: Execute {command}')
@@ -148,25 +146,24 @@ def xds_start(
 def main(root, configuration, is_force, is_maxwell):
     """Main processing entry point for one dataset folder."""
 
-    print(f'We are here: {root}')
+    logger.info(f'We are here: {root}')
     raw_dir = configuration['crystallography']['raw_directory']
     proc_dir = configuration['crystallography']['processed_directory']
-    print("proc_dir=", proc_dir)
+    
     files = [f for f in os.listdir(root) if os.path.isfile(os.path.join(root, f))]
     info_path = os.path.join(root, 'info.txt')
     if not (os.path.exists(info_path) and os.path.getsize(info_path) > 0 and len(files) > 1):
         logger.info(f"In {root} there is no usable info.txt file.")
         return
-    print(157, "main")
+    
     # Read experiment method
     with open(info_path, 'r') as f:
         method = next(f).split(':')[-1].strip()
-    print("method", method)
-    print("root = ", root)
+
     subpath = root[len(raw_dir):].lstrip(os.sep)
     proc_subpath = os.path.join(proc_dir, subpath)
 
-    print(f'Processing {proc_subpath} with method: {method}')
+    logger.info(f'Processing {proc_subpath} with method: {method}')
 
     if not os.path.exists(proc_subpath):
         os.makedirs(proc_subpath, exist_ok=True)
@@ -191,7 +188,7 @@ def main(root, configuration, is_force, is_maxwell):
                     shutil.rmtree(f_path)
             except Exception as e:
                 logger.warning(f'Failed to delete {f_path}: {e}')
-        print(f'Cleared old results in {proc_subpath}')
+        logger.info(f'Cleared old results in {proc_subpath}')
 
     # Skip if already processed or SLURM overloaded
     if os.path.exists(flag_file) or len(pending_jobs) > MAX_PENDING_JOBS or \
@@ -228,15 +225,15 @@ def find_and_parse_metadata(base_path):
         sshPublicKeyPath: shared/id_rsa.pub
         userAccount: bttest04
     """
-    print("Parsing metadata...")
+    logger.info("Parsing metadata...")
     # Recursive search for files like beamtime-metadata*.json
     base_path = base_path.split('/raw')[0] if '/raw' in base_path else base_path
-    print(base_path)
+    
     if not os.path.exists(base_path):  # Check if the base path exists
         raise FileNotFoundError(f"The base path {base_path} does not exist.")
     pattern = os.path.join(base_path, "beamtime-metadata*.json")
     json_files = glob.glob(pattern, recursive=True)
-    print(json_files)
+    
     for json_file in json_files:
         try:
             with open(json_file, "r") as f:
@@ -258,7 +255,7 @@ def find_and_parse_metadata(base_path):
                 return result 
 
         except (json.JSONDecodeError, FileNotFoundError) as e:
-            print(f"Skipping {json_file}: {e}")
+            logger.info(f"Skipping {json_file}: {e}")
             continue
 
     raise FileNotFoundError("No valid beamtime-metadata*.json file found with required fields.")
@@ -293,7 +290,6 @@ def filling_configuration_file(configuration_file_template):
     with open(output_file, "w") as f:
         f.write(filled_template)
 
-    print(f"Generated file: {output_file}")
     return output_file
 
 def creating_folder_structure(
@@ -338,9 +334,9 @@ if __name__ == "__main__":
 
     #Creating the folder structure for processed data
     creating_folder_structure(processed_directory)
-    print("created folder structure")
+    
     result_parsed_metadata = find_and_parse_metadata(raw_directory)
-    print("parsed metadata")
+    
     beamtimeId = result_parsed_metadata['beamtimeId'] 
     corePath = result_parsed_metadata['corePath']
     reservedNodes = result_parsed_metadata['reservedNodes'] if args.maxwell is None else [args.maxwell]
@@ -357,14 +353,14 @@ if __name__ == "__main__":
     "slurmPartition": slurmPartition,
     })
     
-    print(f"Configuration: {configuration}")
-    print(f"Beamtime ID: {beamtimeId}")
-    print(f"Core Path: {corePath}")
-    print(f"Reserved Nodes: {reservedNodes}")
+    logger.info(f"Configuration: {configuration}")
+    logger.info(f"Beamtime ID: {beamtimeId}")
+    logger.info(f"Core Path: {corePath}")
+    logger.info(f"Reserved Nodes: {reservedNodes}")
     
     
     if args.offline:
-        print("offline")
+        
         to_process = []
         blocks_of_files = args.blocks
         if blocks_of_files is not None:
@@ -391,6 +387,6 @@ if __name__ == "__main__":
         if args.path is None:
             logger.error('ERROR: YOU HAVE TO GIVE THE ABSOLUTE PATH TO THE RAW FOLDER YOU ARE GOING TO PROCESS IF YOU ARE IN THIS MODE!')
         else:
-            print("Processing single folder")
+            logger.info("Processing single folder")
             main(args.path, configuration, is_force, is_maxwell)
             logger.info(f'INFO: Processed {args.path}')

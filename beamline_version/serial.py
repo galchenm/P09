@@ -13,6 +13,7 @@ from string import Template
 
 os.nice(0)
 
+split_lines = 250
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                             command_for_data_processing, cell_file,
@@ -29,7 +30,7 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
     
 
     geom = "geometry.geom"
-    split_lines = 250
+    
 
     os.chdir(proc)
     os.chmod(proc, 0o777)
@@ -42,7 +43,7 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
         d.mkdir(exist_ok=True)
 
     name1 = Path(proc).name
-    print(name1)
+    
 
     # Load modules
     subprocess.run("source /etc/profile.d/modules.sh && module load maxwell xray crystfel", shell=True, executable='/bin/bash')
@@ -77,13 +78,13 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
     split_prefix = f"events-{name1}.lst"
     subprocess.run(f"split -a 3 -d -l {split_lines} {list_cbf} {split_prefix}", shell=True)
     
-        # Create and submit SLURM jobs
+    # Create and submit SLURM jobs
     for split_file in sorted(Path(".").glob(f"{split_prefix}*")):
         suffix = split_file.name.replace(f"events-{name1}.lst", "")
         name = f"{name1}{suffix}"
         stream = f"{name1}.stream{suffix}"
         slurmfile = f"{name}.sh"
-
+        print(f"Processing {split_file.name} -> {stream}")
         with open(slurmfile, "w") as f:
             if "maxwell" not in RESERVED_NODE:
                 login_line = f"ssh -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
@@ -99,7 +100,7 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                 f.write("#SBATCH --nodes=1\n")
                 f.write("#SBATCH --nice=100\n")
                 f.write("#SBATCH --mem=500000\n")
-                    f.write(f"#SBATCH --job-name  {name}\n")
+            f.write(f"#SBATCH --job-name  {name}\n")
             f.write(f"#SBATCH --output    {error_dir}/{name}-%N-%j.out\n")
             f.write(f"#SBATCH --error     {error_dir}/{name}-%N-%j.err\n\n")
             f.write("source /etc/profile.d/modules.sh\n")
@@ -112,50 +113,9 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
             if pdb:
                 command += f" -p {pdb}"
             f.write(f"{command}\n")
-
+        
         subprocess.run(f"sbatch {slurmfile}", shell=True)        
-    """
-    if "maxwell" not in RESERVED_NODE:
-        login_line = f"ssh -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
-        sbatch_file = [
-            "#!/bin/sh\n",
-            login_line + "\n",
-            f"#SBATCH --job-name={job_name}\n",
-            f"#SBATCH --partition={SLURM_PARTITION}\n",
-            f"#SBATCH --reservation={RESERVED_NODE}\n",
-            "#SBATCH --nodes=1\n",
-            f"#SBATCH --output={out_file}\n",
-            f"#SBATCH --error={err_file}\n",
-            "source /etc/profile.d/modules.sh\n",
-            "module load maxwell xray crystfel\n",
-            f"{command_for_data_processing} {folder_with_raw_data} {current_data_processing_folder} {cell_file}\n"
-        ]
-    else:
-        sbatch_file = [
-            "#!/bin/sh\n",
-            f"#SBATCH --job-name={job_name}\n",
-            "#SBATCH --partition=allcpu\n",
-            "#SBATCH --time=12:00:00\n",
-            "#SBATCH --nodes=1\n",
-            "#SBATCH --nice=100\n",
-            "#SBATCH --mem=500000\n",
-            f"#SBATCH --output={out_file}\n",
-            f"#SBATCH --error={err_file}\n",
-            "source /etc/profile.d/modules.sh\n",
-            "module load xray maxwell crystfel\n",
-            f"{command_for_data_processing} {folder_with_raw_data} {current_data_processing_folder} {cell_file}\n"
-        ]
 
-    with open(job_file, 'w') as fh:
-        fh.writelines(sbatch_file)
-
-    os.chmod(job_file, 0o755)
-
-    if shutil.which("sbatch"):
-        os.system(f"sbatch {job_file}")
-    else:
-        print("Error: sbatch command not found. Job not submitted.")
-    """
     
 def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_string=False):
     if fallback is None:
@@ -225,7 +185,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder,
         monitor_file.write(src.substitute(template_data))
 
     template_geom_path.unlink()
-
+    
     serial_data_processing(
         folder_with_raw_data, current_data_processing_folder,
         command_for_data_processing, cell_file,
@@ -236,7 +196,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder,
 def main():
     """Main function to handle command line arguments and initiate data processing."""
     # CLI Argument Handling
-    print("sys.argv=", sys.argv)
+    
     args = sys.argv[1:]
     
     if len(args) != 14:
@@ -265,7 +225,7 @@ def main():
     DISTANCE_OFFSET = float(DISTANCE_OFFSET)
     if cell_file == "None":
         cell_file = None
-
+    
     filling_template(
         folder_with_raw_data,
         current_data_processing_folder,
@@ -282,11 +242,12 @@ def main():
         sshPrivateKeyPath,
         sshPublicKeyPath
     )
-
+    
     # Create flag file
     flag_file = Path(current_data_processing_folder) / 'flag.txt'
     flag_file.touch(exist_ok=True)
 
 
 if __name__ == '__main__':
+    
     main()
