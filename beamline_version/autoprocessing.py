@@ -310,7 +310,8 @@ def creating_folder_structure(
 # Setup logger
 setup_logger()
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for the autoprocessing script."""
     logger = logging.getLogger('app')
     #reading configuration file
     args = parse_cmdline_args()
@@ -390,3 +391,6 @@ if __name__ == "__main__":
             logger.info("Processing single folder")
             main(args.path, configuration, is_force, is_maxwell)
             logger.info(f'INFO: Processed {args.path}')
+
+if __name__ == "__main__":
+    main()
