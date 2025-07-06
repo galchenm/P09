@@ -93,7 +93,7 @@ def serial_start(
     
     # Extracting parameters from the configuration
     USER = configuration['USER']
-    RESERVED_NODE = configuration['reservedNodes'] if not is_maxwell else "maxwell"
+    RESERVED_NODE = configuration['RESERVED_NODE'] if not is_maxwell else "maxwell"
     SLURM_PARTITION = configuration['slurmPartition']
     sshPrivateKeyPath =  configuration["sshPrivateKeyPath"]
     sshPublicKeyPath =  configuration["sshPublicKeyPath"]
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     
     beamtimeId = result_parsed_metadata['beamtimeId'] 
     corePath = result_parsed_metadata['corePath']
-    reservedNodes = result_parsed_metadata['reservedNodes'] if args.maxwell is None else [args.maxwell]
+    reservedNodes = result_parsed_metadata['reservedNodes'] if not args.maxwell is None else ["maxwell"]
     sshPrivateKeyPath = result_parsed_metadata['sshPrivateKeyPath']
     sshPublicKeyPath = result_parsed_metadata['sshPublicKeyPath']
     USER = result_parsed_metadata['userAccount'] if args.u is None else args.u
