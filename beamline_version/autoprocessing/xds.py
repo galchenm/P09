@@ -117,9 +117,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
     xds_start(current_data_processing_folder, command_for_data_processing,
             USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
 
-
-# --- MAIN ---
-if __name__ == "__main__":
+def main():
     folder_with_raw_data = sys.argv[1]
     current_data_processing_folder = sys.argv[2]
     ORGX = float(sys.argv[3]) if sys.argv[3] != "None" else 0
@@ -149,3 +147,6 @@ if __name__ == "__main__":
                         XDS_INP_template, USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath)
 
         Path(current_data_processing_folder, 'flag.txt').touch()
+
+if __name__ == "__main__":
+    main()
