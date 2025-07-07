@@ -144,7 +144,7 @@ def xds_start(
     os.system(command)
 
 
-def main(root, configuration, is_force, is_maxwell):
+def run(root, configuration, is_force, is_maxwell):
     """Main processing entry point for one dataset folder."""
 
     logger.info(f'We are here: {root}')
@@ -377,12 +377,12 @@ def main():
                 for pattern in to_process:
                     
                     if pattern in root[len(raw_directory):]:
-                        main(root, configuration, is_force, is_maxwell)
+                        run(root, configuration, is_force, is_maxwell)
                         logger.info(f'INFO: Processed {root}')
         else:
             while True: #main cycle for inspection folders and running data processing
                 for root, dirs, files in os.walk(raw_directory):
-                    main(root, configuration, is_force, is_maxwell)
+                    run(root, configuration, is_force, is_maxwell)
                     logger.info(f'INFO: Processed {root}')
                 time.sleep(2)
     else:
@@ -390,7 +390,7 @@ def main():
             logger.error('ERROR: YOU HAVE TO GIVE THE ABSOLUTE PATH TO THE RAW FOLDER YOU ARE GOING TO PROCESS IF YOU ARE IN THIS MODE!')
         else:
             logger.info("Processing single folder")
-            main(args.path, configuration, is_force, is_maxwell)
+            run(args.path, configuration, is_force, is_maxwell)
             logger.info(f'INFO: Processed {args.path}')
 
 if __name__ == "__main__":
