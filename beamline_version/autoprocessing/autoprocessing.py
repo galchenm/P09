@@ -126,7 +126,8 @@ def xds_start(
     USER = configuration['USER']
     RESERVED_NODE = configuration['RESERVED_NODE'] if not is_maxwell else "maxwell"
     SLURM_PARTITION = configuration['slurmPartition']
-    
+    sshPrivateKeyPath = configuration["sshPrivateKeyPath"]
+    sshPublicKeyPath = configuration["sshPublicKeyPath"]
     #ORGX and ORGY are the origin of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
     ORGY = configuration['crystallography']['ORGY']
