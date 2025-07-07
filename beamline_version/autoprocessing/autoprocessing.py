@@ -341,7 +341,7 @@ def main():
     beamtimeId = result_parsed_metadata['beamtimeId'] 
     corePath = result_parsed_metadata['corePath']
     reservedNodes = result_parsed_metadata['reservedNodes'] if not args.maxwell is None else ["maxwell"]
-    sshPrivateKeyPath = result_parsed_metadata['sshPrivateKeyPath']
+    sshPrivateKeyPath = os.path.join(raw_directory.split('/raw')[0], result_parsed_metadata['sshPrivateKeyPath'])
     sshPublicKeyPath = result_parsed_metadata['sshPublicKeyPath']
     USER = result_parsed_metadata['userAccount'] if args.u is None else args.u
     slurmPartition = result_parsed_metadata['slurmPartition'] 
