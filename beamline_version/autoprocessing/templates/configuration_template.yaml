@@ -3,10 +3,10 @@ crystallography:
     ORGY: "None"
     DISTANCE_OFFSET: 0 # [mm]
     command_for_processing_rotational: "xds_par" 
-    command_for_processing_serial: "/gpfs/comon/scripts/turbo-index-p09"
-    raw_directory: "/gpfs/comon/raw"
-    converted_directory: "/gpfs/comon/processed/convert"
-    processed_directory: "/gpfs/comon/processed"
+    command_for_processing_serial: "/gpfs/common/scripts/turbo-index-p09"
+    raw_directory: "/gpfs/current/raw"
+    converted_directory: "/gpfs/current/processed/convert"
+    processed_directory: "/gpfs/current/processed"
     XDS_INP_template: $XDS_INP_template
     geometry_for_conversion: $geometry_for_conversion #"/gpfs/comon/scripts/lambda1M5.geom"
     geometry_for_processing: $geometry_for_processing #"/gpfs/comon/scripts/pilatus6M.geom"
