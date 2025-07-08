@@ -4,6 +4,7 @@
 
 import os
 import re
+import glob
 import shlex
 import shutil
 import subprocess
@@ -16,19 +17,14 @@ os.nice(0)
 split_lines = 250
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
-                            command_for_data_processing, cell_file,
-                            USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
+                            cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
 
     job_name = Path(current_data_processing_folder).name
-    job_file = Path(current_data_processing_folder) / f"{job_name}_serial.sh"
-    err_file = Path(current_data_processing_folder) / f"{job_name}_serial.err"
-    out_file = Path(current_data_processing_folder) / f"{job_name}_serial.out"
-    
+
     raw = folder_with_raw_data
     proc = current_data_processing_folder
     pdb = cell_file if cell_file else ""
     
-
     geom = "geometry.geom"
     
 
@@ -84,37 +80,50 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
         name = f"{name1}{suffix}"
         stream = f"{name1}.stream{suffix}"
         slurmfile = f"{name}.sh"
+        err_file = Path(current_data_processing_folder) / f"{name}_serial.err"
+        out_file = Path(current_data_processing_folder) / f"{name}_serial.out"
+    
         print(f"Processing {split_file.name} -> {stream}")
         with open(slurmfile, "w") as f:
+            sbatch_command = "#!/bin/sh\n"
+            sbatch_command += f"#SBATCH --job-name={name}\n"
+            sbatch_command += f"#SBATCH --output={out_file}\n"
+            sbatch_command += f"#SBATCH --error={err_file}\n"
             if "maxwell" not in RESERVED_NODE:
-                login_line = f"ssh -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
-                f.write(f"#!/bin/sh\n{login_line}\n")
-                f.write(f"#SBATCH --job-name={name}\n")
-                f.write(f"#SBATCH --partition={SLURM_PARTITION}\n")
-                f.write(f"#SBATCH --reservation={RESERVED_NODE}\n")
+                ssh_command = (
+                    f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no "
+                    f"-o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no "
+                    f"-o PasswordAuthentication=no -o PubkeyAuthentication=yes "
+                    f"-o PreferredAuthentications=publickey -o ConnectTimeout=10 "
+                    f"-l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
+                )
+                sbatch_command += f"#SBATCH --partition={SLURM_PARTITION}\n"
+                sbatch_command += f"#SBATCH --reservation={RESERVED_NODE}\n"
             else:
-                f.write("#!/bin/sh\n")
-                f.write(f"#SBATCH --job-name={name}\n")
-                f.write("#SBATCH --partition=allcpu,upex,short\n")
-                f.write("#SBATCH --time=4:00:00\n")
-                f.write("#SBATCH --nodes=1\n")
-                f.write("#SBATCH --nice=100\n")
-                f.write("#SBATCH --mem=500000\n")
-            f.write(f"#SBATCH --job-name  {name}\n")
-            f.write(f"#SBATCH --output    {error_dir}/{name}-%N-%j.out\n")
-            f.write(f"#SBATCH --error     {error_dir}/{name}-%N-%j.err\n\n")
-            f.write("source /etc/profile.d/modules.sh\n")
-            f.write("module load maxwell xray crystfel\n\n")
+                ssh_command = ""
+                sbatch_command += "#SBATCH --partition=allcpu,upex,short\n"
+                sbatch_command += "#SBATCH --time=4:00:00\n"
+                sbatch_command += "#SBATCH --nodes=1\n"
+                sbatch_command += "#SBATCH --nice=100\n"
+                sbatch_command += "#SBATCH --mem=500000\n"
+            
+            sbatch_command += "module load maxwell xray crystfel\n"
 
-            command = f"indexamajig -i {split_file.name} -o {stream_dir}/{stream} -j 80 -g {geom} --int-radius=3,6,8"
-            command += " --peaks=peakfinder8 --min-snr=8 --min-res=10 --max-res=1200 --threshold=5"
-            command += " --min-pix-count=1 --max-pix-count=10 --min-peaks=15 --local-bg-radius=3"
-            command += " --indexing=mosflm-latt-nocell --no-check-cell --multi"
+            indexing_command = f"indexamajig -i {split_file.name} -o {stream_dir}/{stream} -j 80 -g {geom} --int-radius=3,6,8"
+            indexing_command += " --peaks=peakfinder8 --min-snr=8 --min-res=10 --max-res=1200 --threshold=5"
+            indexing_command += " --min-pix-count=1 --max-pix-count=10 --min-peaks=15 --local-bg-radius=3"
+            indexing_command += f" --indexing={indexing_method} --no-check-cell --multi"
             if pdb:
-                command += f" -p {pdb}"
-            f.write(f"{command}\n")
+                indexing_command += f" -p {pdb}"
+
+            f.write(sbatch_command + "\n" + indexing_command + "\n")
         
-        subprocess.run(f"sbatch {slurmfile}", shell=True)        
+        os.chmod(slurmfile, 0o755)
+        # Submit the job  
+        if ssh_command:
+            subprocess.run(f'{ssh_command} "sbatch {slurmfile}"', shell=True, check=True)
+        else:
+            subprocess.run(f'sbatch {slurmfile}', shell=True, check=True)
 
     
 def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_string=False):
@@ -143,8 +152,7 @@ def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_str
 def filling_template(folder_with_raw_data, current_data_processing_folder,
                     geometry_filename_template, data_h5path,
                     ORGX=0, ORGY=0, DISTANCE_OFFSET=0,
-                    command_for_data_processing='turbo-index-P09', cell_file=None,
-                    USER=None, RESERVED_NODE=None, SLURM_PARTITION=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
+                    cell_file=None, USER=None, RESERVED_NODE=None, SLURM_PARTITION=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
     """Fills the geometry template with parameters extracted from info.txt and prepares for data processing."""
     
     os.chdir(current_data_processing_folder)
@@ -168,8 +176,17 @@ def filling_template(folder_with_raw_data, current_data_processing_folder,
     WAVELENGTH = extract_value_from_info(info_path, "wavelength")
     PHOTON_ENERGY = 12400 / WAVELENGTH
     
-    cell_file = cell_file or extract_value_from_info(info_path, "cell_file", fallback="", is_string=True)
+    if not cell_file:
+        # Try to find a .cell or .pdb file in the raw data folder
+        cell_matches = glob.glob(str(Path(folder_with_raw_data) / "*.cell"))
+        if cell_matches:
+            cell_file = cell_matches[0]
+        else:
+            pdb_matches = glob.glob(str(Path(folder_with_raw_data) / "*.pdb"))
+            if pdb_matches:
+                cell_file = pdb_matches[0]
 
+    indexing_method = extract_value_from_info(info_path, "indexing_method", fallback="mosflm-latt-nocell", is_string=True)
     template_data = {
         "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
         "ORGX": -ORGX,
@@ -188,8 +205,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder,
     
     serial_data_processing(
         folder_with_raw_data, current_data_processing_folder,
-        command_for_data_processing, cell_file,
-        USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath
+        cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath
     )
 
 
@@ -199,8 +215,8 @@ def main():
     
     args = sys.argv[1:]
     
-    if len(args) != 14:
-        print(f"Expected 14 arguments, got {len(args)}")
+    if len(args) != 13:
+        print(f"Expected 13 arguments, got {len(args)}")
         sys.exit(1)
 
     (
@@ -209,7 +225,6 @@ def main():
         ORGX,
         ORGY,
         DISTANCE_OFFSET,
-        command_for_data_processing,
         geometry_filename_template,
         cell_file,
         data_h5path,
@@ -234,7 +249,6 @@ def main():
         ORGX,
         ORGY,
         DISTANCE_OFFSET,
-        command_for_data_processing,
         cell_file,
         USER,
         RESERVED_NODE,

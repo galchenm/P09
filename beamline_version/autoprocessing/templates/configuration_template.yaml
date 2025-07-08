@@ -3,7 +3,6 @@ crystallography:
     ORGY: "None"
     DISTANCE_OFFSET: 0 # [mm]
     command_for_processing_rotational: "xds_par" 
-    command_for_processing_serial: "/gpfs/common/scripts/turbo-index-p09"
     raw_directory: "/gpfs/current/raw"
     converted_directory: "/gpfs/current/processed/convert"
     processed_directory: "/gpfs/current/processed"

@@ -66,20 +66,28 @@ def parse_cmdline_args():
     parser.add_argument('--force', default=False, action='store_true', help="Use this flag if you want to force rerunning in the same processed folder")
     return parser.parse_args()
 
-
-def setup_logger():
+def setup_logger(log_dir=None):
+    import logging, os
     level = logging.INFO
     logger = logging.getLogger("app")
     logger.setLevel(level)
-    log_file = 'Auto-processing-P09-beamline.log'
+
+    if log_dir is None:
+        log_dir = os.getcwd()  # fallback to current dir
+
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, 'Auto-processing-P09-beamline.log')
+
     formatter = logging.Formatter('%(levelname)s - %(message)s')
-    ch = logging.FileHandler(os.path.join(os.getcwd(), log_file))
-    
+    ch = logging.FileHandler(log_file)
     ch.setLevel(level)
     ch.setFormatter(formatter)
-    logger.addHandler(ch)
+
+    if not logger.handlers:  # avoid adding multiple handlers in re-runs
+        logger.addHandler(ch)
+
     logger.info("Setup logger in PID {}".format(os.getpid()))
-    print("Log file is {}".format(os.path.join(os.getcwd(), log_file)))
+    print("Log file is {}".format(log_file))
 
 
 def serial_start(
@@ -106,10 +114,9 @@ def serial_start(
     cell_file = configuration['crystallography']['cell_file']
     geometry_filename_template = configuration["crystallography"]["geometry_for_processing"]
     
-    command_for_processing_serial = configuration['crystallography']['command_for_processing_serial']
     data_h5path = configuration['crystallography']['data_h5path'] 
 
-    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_serial} {geometry_filename_template} {cell_file} {data_h5path} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
+    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {geometry_filename_template} {cell_file} {data_h5path} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
 
     os.system(command)
     
@@ -232,7 +239,7 @@ def find_and_parse_metadata(base_path):
     
     if not os.path.exists(base_path):  # Check if the base path exists
         raise FileNotFoundError(f"The base path {base_path} does not exist.")
-    pattern = os.path.join(base_path, "beamtime-metadata*.json")
+    pattern = os.path.join(f"{base_path}/processed", "beamtime-metadata*.json")
     json_files = glob.glob(pattern, recursive=True)
     
     for json_file in json_files:
@@ -279,7 +286,6 @@ def filling_configuration_file(configuration_file_template):
     templates_folder = os.path.join(CURRENT_PATH_OF_SCRIPT, 'templates')
     
     values = {
-        "command_for_processing_serial": os.path.join(CURRENT_PATH_OF_SCRIPT, "turbo-index-p09"),
         "XDS_INP_template": os.path.join(templates_folder, 'XDS.INP'),
         "geometry_for_processing": os.path.join(templates_folder, 'pilatus6M.geom')
     
@@ -307,10 +313,6 @@ def creating_folder_structure(
         os.makedirs(processed_directory)
         os.chmod(processed_directory, 0o777)
 
-
-# Setup logger
-setup_logger()
-
 def main():
     """Main entry point for the autoprocessing script."""
     logger = logging.getLogger('app')
@@ -328,7 +330,7 @@ def main():
     
     raw_directory = configuration['crystallography']['raw_directory']
     processed_directory = configuration['crystallography']['processed_directory']
-
+    
     while True: 
         #Wait while the directory with raw data appeared
         if os.path.exists(raw_directory):
@@ -336,7 +338,8 @@ def main():
 
     #Creating the folder structure for processed data
     creating_folder_structure(processed_directory)
-    
+
+    setup_logger(processed_directory)
     result_parsed_metadata = find_and_parse_metadata(raw_directory)
     
     beamtimeId = result_parsed_metadata['beamtimeId'] 
@@ -362,7 +365,6 @@ def main():
     
     
     if args.offline:
-        
         to_process = []
         blocks_of_files = args.blocks
         if blocks_of_files is not None:

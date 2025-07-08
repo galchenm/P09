@@ -3,7 +3,6 @@ crystallography:
     ORGY: 1152.9
     DISTANCE_OFFSET: 0 # [mm]
     command_for_processing_rotational: "xds_par" 
-    command_for_processing_serial: "/asap3/petra3/gpfs/p09/2023/data/11016750/shared/autoprocessing/turbo-index-p09"
     raw_directory: "/asap3/petra3/gpfs/p09/2024/data/11020444/raw"
     converted_directory: "/asap3/petra3/gpfs/p09/2024/data/11020444/processed/galchenm/convert"
     processed_directory: "/asap3/petra3/gpfs/p09/2024/data/11020444/processed/galchenm/mosflm_wo_cell_processing"

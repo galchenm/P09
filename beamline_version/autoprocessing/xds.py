@@ -17,15 +17,14 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
                 USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
 
     job_name = Path(current_data_processing_folder).name
-    job_file = Path(current_data_processing_folder) / f"{job_name}_XDS.sh"
+    slurmfile = Path(current_data_processing_folder) / f"{job_name}_XDS.sh"
     err_file = Path(current_data_processing_folder) / f"{job_name}_XDS.err"
     out_file = Path(current_data_processing_folder) / f"{job_name}_XDS.out"
 
     if "maxwell" not in RESERVED_NODE:
-        login_line = f"ssh -l {USER} -i {sshPrivateKeyPath}"
+        ssh_command = f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no -o PasswordAuthentication=no -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=10 -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
         sbatch_file = [
             "#!/bin/sh\n",
-            login_line + "\n",
             f"#SBATCH --job-name={job_name}\n",
             f"#SBATCH --partition={SLURM_PARTITION}\n",
             f"#SBATCH --reservation={RESERVED_NODE}\n",
@@ -37,6 +36,7 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
             f"{command_for_data_processing}\n"
         ]
     else:
+        ssh_command = ""
         sbatch_file = [
             "#!/bin/sh\n",
             f"#SBATCH --job-name={job_name}\n",
@@ -52,12 +52,15 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
             f"{command_for_data_processing}\n"
         ]
 
-    with open(job_file, 'w') as fh:
+    with open(slurmfile, 'w') as fh:
         fh.writelines(sbatch_file)
 
-    os.chmod(job_file, 0o755)
-    subprocess.run(["sbatch", str(job_file)])
-
+    os.chmod(slurmfile, 0o755)
+    # Submit the job  
+    if ssh_command:
+        subprocess.run(f'{ssh_command} "sbatch {slurmfile}"', shell=True, check=True)
+    else:
+        subprocess.run(f'sbatch {slurmfile}', shell=True, check=True)
 
 def extract_value_from_info(info_path, key, fallback=0, is_float=True):
     try:
