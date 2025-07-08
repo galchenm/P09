@@ -117,7 +117,7 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                 indexing_command += f" -p {pdb}"
 
             f.write(sbatch_command + "\n" + indexing_command + "\n")
-        
+            f.write(f"touch {name}.done\n")
         os.chmod(slurmfile, 0o755)
         # Submit the job  
         if ssh_command:
