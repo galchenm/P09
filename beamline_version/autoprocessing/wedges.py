@@ -203,6 +203,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         "beta": beta,
         "gamma": gamma,
         "SPACE_GROUP_NUMBER": SPACE_GROUP_NUMBER,
+        "INCLUDE_RESOLUTION_RANGE": "50.0 1.41", #default parameters
         "ROTATION_AXIS": "1.0 0.0 0.0" if position % 2 == 0 else "-1.0 0.0 0.0"
     }
 
