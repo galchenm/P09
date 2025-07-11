@@ -150,6 +150,36 @@ def xds_start(
     logger.info(f'INFO: Execute {command}')
     os.system(command)
 
+def wedges_xds_start(
+            folder_with_raw_data, 
+            current_data_processing_folder,
+            configuration,
+            is_force,
+            is_maxwell,
+            REFERENCE_DATA_SET="!REFERENCE_DATA_SET"
+            ):
+    """Starts the XDS data processing for the given raw data folder."""
+    
+    # Extracting parameters from the configuration
+    USER = configuration['USER']
+    RESERVED_NODE = configuration['RESERVED_NODE'] if not is_maxwell else "maxwell"
+    SLURM_PARTITION = configuration['slurmPartition']
+    sshPrivateKeyPath = configuration["sshPrivateKeyPath"]
+    sshPublicKeyPath = configuration["sshPublicKeyPath"]
+    #ORGX and ORGY are the origin of the detector that is needed for xds data processing
+    ORGX = configuration['crystallography']['ORGX']
+    ORGY = configuration['crystallography']['ORGY']
+    
+    #DISTANCE_OFFSET is the offset for recalculation of real detector distance required for XDS
+    DISTANCE_OFFSET = configuration['crystallography']['DISTANCE_OFFSET'] 
+    
+    command_for_processing_rotational = configuration['crystallography']['command_for_processing_rotational']
+    XDS_INP_wedges_template = configuration['crystallography']['XDS_INP_wedges_template']
+
+    logger = logging.getLogger('app')
+    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/wedges.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {XDS_INP_wedges_template} {REFERENCE_DATA_SET} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
+    logger.info(f'INFO: Execute {command}')
+    os.system(command)
 
 def run(root, configuration, is_force, is_maxwell):
     """Main processing entry point for one dataset folder."""
@@ -208,6 +238,9 @@ def run(root, configuration, is_force, is_maxwell):
     if method == 'rotational':
         logger.info(f"XDS: {root}")
         xds_start(root, proc_subpath, configuration, is_force, is_maxwell)
+    elif method == 'wedges':
+        logger.info(f"WEDGES: {root}")
+        wedges_xds_start(root, proc_subpath, configuration, is_force, is_maxwell, REFERENCE_DATA_SET="!REFERENCE_DATA_SET")
     else:
         logger.info(f"SERIAL: {root}")
         serial_start(root, proc_subpath, configuration, is_force, is_maxwell)
@@ -287,6 +320,7 @@ def filling_configuration_file(configuration_file_template):
     
     values = {
         "XDS_INP_template": os.path.join(templates_folder, 'XDS.INP'),
+        "XDS_INP_wedges_template": os.path.join(templates_folder, 'XDS_WEDGES.INP'),
         "geometry_for_processing": os.path.join(templates_folder, 'pilatus6M.geom')
     
     }
