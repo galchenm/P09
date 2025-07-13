@@ -5,6 +5,7 @@
 import os
 import sys
 import glob
+import gemmi
 import re
 import shutil
 import subprocess
@@ -15,14 +16,15 @@ os.nice(0)
 
 def xds_start(current_data_processing_folder, command_for_data_processing,
                 USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
-
+    """Prepare and submit the XDS job."""
     job_name = Path(current_data_processing_folder).name
     slurmfile = Path(current_data_processing_folder) / f"{job_name}_XDS.sh"
     err_file = Path(current_data_processing_folder) / f"{job_name}_XDS.err"
     out_file = Path(current_data_processing_folder) / f"{job_name}_XDS.out"
 
     if "maxwell" not in RESERVED_NODE:
-        ssh_command = f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no -o PasswordAuthentication=no -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=10 -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
+        login_node = RESERVED_NODE.split(",")[0] if "," in RESERVED_NODE else RESERVED_NODE
+        ssh_command = f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no -o PasswordAuthentication=no -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=10 -l {USER} -i {sshPrivateKeyPath} {login_node}"
         sbatch_file = [
             "#!/bin/sh\n",
             f"#SBATCH --job-name={job_name}\n",
@@ -63,6 +65,16 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
         subprocess.run(f'sbatch {slurmfile}', shell=True, check=True)
 
 def extract_value_from_info(info_path, key, fallback=0, is_float=True):
+    """Extract a value from the info.txt file based on the provided key.
+    Args:
+        info_path (str): Path to the info.txt file.
+        key (str): The key to search for in the file.
+        fallback: The value to return if the key is not found. Defaults to 0 for numeric values and an empty string for string values.
+        is_float (bool): If True, the extracted value will be converted to float. Defaults
+            to True.
+    Returns:
+        The extracted value if found, otherwise the fallback value.
+    """
     try:
         with open(info_path) as f:
             lines = f.readlines()
@@ -75,12 +87,88 @@ def extract_value_from_info(info_path, key, fallback=0, is_float=True):
         pass
     return fallback
 
+def parse_cryst1_and_spacegroup_number(file_path):
+    """Parse the CRYST1 line from a PDB file to extract unit cell parameters and space group number.
+    Args:
+        file_path (str): Path to the PDB file.
+    Returns:
+        tuple: A tuple containing the unit cell parameters (a, b, c, alpha, beta, gamma) and space group number.
+    Raises:
+        ValueError: If the CRYST1 line is not found in the file.
+    """
+    pattern = (
+        r"CRYST1\s+"
+        r"([\d.]+)\s+"     # a
+        r"([\d.]+)\s+"     # b
+        r"([\d.]+)\s+"     # c
+        r"([\d.]+)\s+"     # alpha
+        r"([\d.]+)\s+"     # beta
+        r"([\d.]+)\s+"     # gamma
+        r"(.{1,11})\s+\d+" # space group + Z
+    )
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            if line.startswith("CRYST1"):
+                match = re.match(pattern, line.strip())
+                if match:
+                    a = float(match.group(1))
+                    b = float(match.group(2))
+                    c = float(match.group(3))
+                    alpha = float(match.group(4))
+                    beta = float(match.group(5))
+                    gamma = float(match.group(6))
+                    space_group = match.group(7).strip()
+                    sg_number = gemmi.SpaceGroup(space_group).number
+                    return a, b, c, alpha, beta, gamma, sg_number
+
+    raise ValueError("No CRYST1 line found in the provided PDB file.")
+
+def parse_UC_file(UC_file):
+    """Parse a unit cell file to extract unit cell parameters.
+    This function checks the file extension and calls the appropriate parsing function. 
+    If the file is a PDB file, it uses the parse_cryst1_from_pdb function.
+    If the file is not a PDB file, it uses a regular expression to extract the unit cell parameters.
+    Args:
+        UC_file (str): The path to the unit cell file.
+    Returns:
+        tuple: A tuple containing the unit cell parameters (a, b, c, alpha, beta, gamma).
+    Raises:
+        ValueError: If the unit cell parameters are not found in the file.
+    """
+    if UC_file.endswith('pdb'):
+        return parse_cryst1_and_spacegroup_number(UC_file)
+    else:
+        # Regular expressions to capture the unit cell parameters
+        pattern = r"a = ([\d.]+) A.*?b = ([\d.]+) A.*?c = ([\d.]+) A.*?al = ([\d.]+) deg.*?be = ([\d.]+) deg.*?ga = ([\d.]+) deg"
+        
+        # Read the content of the file
+        with open(UC_file, 'r') as file:
+            file_content = file.read()
+
+        # Search for the pattern in the file content
+        match = re.search(pattern, file_content, re.DOTALL)
+
+        if match:
+            # Extract values from the match
+            a = float(match.group(1))
+            b = float(match.group(2))
+            c = float(match.group(3))
+            al = float(match.group(4))
+            be = float(match.group(5))
+            ga = float(match.group(6))
+            return a, b, c, al, be, ga, "0"  # Default space group number
+        else:
+            raise ValueError("Unit cell parameters not found in the provided file.")
+            return None, None, None, None, None, None, None
+
+
 
 def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=0, ORGY=0,
                     DISTANCE_OFFSET=0, NAME_TEMPLATE_OF_DATA_FRAMES='blabla',
                     command_for_data_processing='xds_par', XDS_INP_template=None,
                     USER=None, RESERVED_NODE=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
-
+    """Fills the geometry template with parameters extracted from info.txt and prepares for data processing."""
     folder_with_raw_data = Path(folder_with_raw_data)
     current_data_processing_folder = Path(current_data_processing_folder)
 
@@ -99,6 +187,16 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
     OSCILLATION_RANGE = extract_value_from_info(info_path, "degrees/frame")
     WAVELENGTH = extract_value_from_info(info_path, "wavelength")
 
+    cell_matches = glob.glob(str(Path(folder_with_raw_data) / "*.cell"))
+    if cell_matches:
+        cell_file = cell_matches[0]
+        a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = parse_UC_file(cell_file)
+    else:
+        pdb_matches = glob.glob(str(Path(folder_with_raw_data) / "*.pdb"))
+        if pdb_matches:
+            cell_file = pdb_matches[0]
+            a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = parse_UC_file(cell_file)
+
     template_data = {
         "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
         "ORGX": ORGX,
@@ -107,7 +205,9 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         "NAME_TEMPLATE_OF_DATA_FRAMES": NAME_TEMPLATE_OF_DATA_FRAMES,
         "STARTING_ANGLE": STARTING_ANGLE,
         "OSCILLATION_RANGE": OSCILLATION_RANGE,
-        "WAVELENGTH": WAVELENGTH
+        "WAVELENGTH": WAVELENGTH,
+        "SPACE_GROUP_NUMBER": f"SPACE_GROUP_NUMBER = {SPACE_GROUP_NUMBER}" if SPACE_GROUP_NUMBER else "SPACE_GROUP_NUMBER = 0",
+        "UNIT_CELL_CONSTANTS": f"UNIT_CELL_CONSTANTS = {a:.2f} {b:.2f} {c:.2f} {alpha:.2f} {beta:.2f} {gamma:.2f}" if all([a, b, c, alpha, beta, gamma]) else "!UNIT_CELL_CONSTANTS",
     }
 
     with open(current_data_processing_folder / 'template.INP', 'r') as f:
@@ -121,6 +221,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
             USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
 
 def main():
+    """Main function to process the command line arguments and call the filling_template function."""
     folder_with_raw_data = sys.argv[1]
     current_data_processing_folder = sys.argv[2]
     ORGX = float(sys.argv[3]) if sys.argv[3] != "None" else 0

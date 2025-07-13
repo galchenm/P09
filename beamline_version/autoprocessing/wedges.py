@@ -15,16 +15,19 @@ from collections import defaultdict
 
 os.nice(0)
 
+SLEEP_TIME = 10
+
 def xds_start(current_data_processing_folder, command_for_data_processing,
                 USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
-
+    """Prepare and submit the XDS job."""
     job_name = Path(current_data_processing_folder).name
     slurmfile = Path(current_data_processing_folder) / f"{job_name}_XDS.sh"
     err_file = Path(current_data_processing_folder) / f"{job_name}_XDS.err"
     out_file = Path(current_data_processing_folder) / f"{job_name}_XDS.out"
 
     if "maxwell" not in RESERVED_NODE:
-        ssh_command = f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no -o PasswordAuthentication=no -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=10 -l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
+        login_node = RESERVED_NODE.split(",")[0] if "," in RESERVED_NODE else RESERVED_NODE
+        ssh_command = f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no -o PasswordAuthentication=no -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=10 -l {USER} -i {sshPrivateKeyPath} {login_node}"
         sbatch_file = [
             "#!/bin/sh\n",
             f"#SBATCH --job-name={job_name}\n",
@@ -35,6 +38,14 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
             f"#SBATCH --error={err_file}\n",
             "source /etc/profile.d/modules.sh\n",
             "module load xray\n",
+            f"{command_for_data_processing}\n",
+            f"sleep {SLEEP_TIME}\n",
+            f"cd {current_data_processing_folder}\n",
+            "cp GXPARM.XDS XPARM.XDS\n",
+            "cp XDS_ASCII.HKL XDS_ASCII.HKL_1\n",
+            "mv CORRECT.LP CORRECT.LP_1\n",
+            "sed -i 's/ JOB= XYCORR INIT/!JOB= XYCORR INIT/g' XDS.INP\n",
+            "sed -i 's/!JOB= CORRECT/ JOB= DEFPIX INTEGRATE CORRECT/g' XDS.INP\n",
             f"{command_for_data_processing}\n"
         ]
     else:
@@ -51,7 +62,15 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
             f"#SBATCH --error={err_file}\n",
             "source /etc/profile.d/modules.sh\n",
             "module load xray\n",
-            f"{command_for_data_processing}\n"
+            f"{command_for_data_processing}\n",
+            f"sleep {SLEEP_TIME}\n",
+            f"cd {current_data_processing_folder}\n",
+            "cp GXPARM.XDS XPARM.XDS\n",
+            "cp XDS_ASCII.HKL XDS_ASCII.HKL_1\n",
+            "mv CORRECT.LP CORRECT.LP_1\n",
+            "sed -i 's/ JOB= XYCORR INIT/!JOB= XYCORR INIT/g' XDS.INP\n",
+            "sed -i 's/!JOB= CORRECT/ JOB= DEFPIX INTEGRATE CORRECT/g' XDS.INP\n",
+            f"{command_for_data_processing}\n"            
         ]
 
     with open(slurmfile, 'w') as fh:
@@ -65,6 +84,14 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
         subprocess.run(f'sbatch {slurmfile}', shell=True, check=True)
 
 def parse_cryst1_and_spacegroup_number(file_path):
+    """Parse the CRYST1 line from a PDB file to extract unit cell parameters and space group number.
+    Args:
+        file_path (str): Path to the PDB file.
+    Returns:
+        tuple: A tuple containing the unit cell parameters (a, b, c, alpha, beta, gamma) and space group number.
+    Raises:
+        ValueError: If the CRYST1 line is not found or does not contain valid data.
+    """
     pattern = (
         r"CRYST1\s+"
         r"([\d.]+)\s+"     # a
@@ -106,7 +133,7 @@ def parse_UC_file(UC_file):
         ValueError: If the unit cell parameters are not found in the file.
     """
     if UC_file.endswith('pdb'):
-        return parse_cryst1_from_pdb(UC_file)
+        return parse_cryst1_and_spacegroup_number(UC_file)
     else:
         # Regular expressions to capture the unit cell parameters
         pattern = r"a = ([\d.]+) A.*?b = ([\d.]+) A.*?c = ([\d.]+) A.*?al = ([\d.]+) deg.*?be = ([\d.]+) deg.*?ga = ([\d.]+) deg"
@@ -132,6 +159,17 @@ def parse_UC_file(UC_file):
             return None, None, None, None, None, None, None
 
 def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_string=False):
+    """Extract a value from the info.txt file based on the provided key.
+    Args:
+        info_path (str): Path to the info.txt file.
+        key (str): The key to search for in the file.
+        fallback: The value to return if the key is not found. Defaults to 0 for numeric values and an empty string for string values.
+        is_float (bool): If True, the extracted value will be converted to float. Defaults
+            to True.
+        is_string (bool): If True, the extracted value will be treated as a string.
+    Returns:
+        The extracted value if found, otherwise the fallback value.
+    """
     if fallback is None:
         fallback = "" if is_string else 0
     try:
@@ -157,7 +195,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
                     XDS_INP_template=None, USER=None, RESERVED_NODE=None, sshPrivateKeyPath=None, 
                     sshPublicKeyPath=None
                     ):
-
+    """Fills the geometry template with parameters extracted from info.txt and prepares for data processing."""
     folder_with_raw_data = Path(folder_with_raw_data)
     current_data_processing_folder = Path(current_data_processing_folder)
 
@@ -183,8 +221,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         pdb_matches = glob.glob(str(Path(folder_with_raw_data) / "*.pdb"))
         if pdb_matches:
             cell_file = pdb_matches[0]
-            a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = parse_cryst1_and_spacegroup_number(cell_file)
-
+            a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = parse_UC_file(cell_file)
 
     template_data = {
         "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
@@ -196,13 +233,8 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         "FIRST": FIRST,
         "LAST": LAST,
         "REFERENCE_DATA_SET": REFERENCE_DATA_SET,
-        "a": a,
-        "b": b, 
-        "c": c,
-        "alpha": alpha,
-        "beta": beta,
-        "gamma": gamma,
-        "SPACE_GROUP_NUMBER": SPACE_GROUP_NUMBER,
+        "SPACE_GROUP_NUMBER": f"SPACE_GROUP_NUMBER = {SPACE_GROUP_NUMBER}" if SPACE_GROUP_NUMBER else "SPACE_GROUP_NUMBER = 0",
+        "UNIT_CELL_CONSTANTS": f"UNIT_CELL_CONSTANTS = {a:.2f} {b:.2f} {c:.2f} {alpha:.2f} {beta:.2f} {gamma:.2f}" if all([a, b, c, alpha, beta, gamma]) else "!UNIT_CELL_CONSTANTS",
         "INCLUDE_RESOLUTION_RANGE": "50.0 1.41", #default parameters
         "ROTATION_AXIS": "1.0 0.0 0.0" if position % 2 == 0 else "-1.0 0.0 0.0"
     }
@@ -218,6 +250,13 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
             USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
 
 def group_cbf_by_position(folder):
+    """Groups CBF files by their position and frame numbers.
+    Args:
+        folder (str): Path to the folder containing CBF files.
+    Returns:
+        dict: A dictionary where keys are position strings and values are dictionaries with 'start', 'end', and 'template'.
+    """
+    
     position_frames = defaultdict(list)
     templates = {}
     for filename in os.listdir(folder):
@@ -250,6 +289,7 @@ def group_cbf_by_position(folder):
 
 
 def main():
+    """Main function to process command line arguments and call the filling_template function."""
     folder_with_raw_data = sys.argv[1]
     current_data_processing_folder = sys.argv[2]
     ORGX = float(sys.argv[3]) if sys.argv[3] != "None" else 0

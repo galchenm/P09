@@ -18,7 +18,7 @@ split_lines = 250
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                             cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
-
+    """Prepare and submit the serial data processing job."""
     job_name = Path(current_data_processing_folder).name
 
     raw = folder_with_raw_data
@@ -27,7 +27,6 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
     
     geom = "geometry.geom"
     
-
     os.chdir(proc)
     os.chmod(proc, 0o777)
     
@@ -40,7 +39,6 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
 
     name1 = Path(proc).name
     
-
     # Load modules
     subprocess.run("source /etc/profile.d/modules.sh && module load maxwell xray crystfel", shell=True, executable='/bin/bash')
 
@@ -90,12 +88,13 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
             sbatch_command += f"#SBATCH --output={out_file}\n"
             sbatch_command += f"#SBATCH --error={err_file}\n"
             if "maxwell" not in RESERVED_NODE:
+                login_node = RESERVED_NODE.split(",")[0] if "," in RESERVED_NODE else RESERVED_NODE
                 ssh_command = (
                     f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no "
                     f"-o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no "
                     f"-o PasswordAuthentication=no -o PubkeyAuthentication=yes "
                     f"-o PreferredAuthentications=publickey -o ConnectTimeout=10 "
-                    f"-l {USER} -i {sshPrivateKeyPath} {RESERVED_NODE}"
+                    f"-l {USER} -i {sshPrivateKeyPath} {login_node}"
                 )
                 sbatch_command += f"#SBATCH --partition={SLURM_PARTITION}\n"
                 sbatch_command += f"#SBATCH --reservation={RESERVED_NODE}\n"
@@ -127,6 +126,16 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
 
     
 def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_string=False):
+    """Extract a value from the info.txt file based on the provided key.
+    Args:
+        info_path (str): Path to the info.txt file.
+        key (str): The key to search for in the file.
+        fallback: The value to return if the key is not found. Defaults to 0 for numeric values and an empty string for string values.
+        is_float (bool): If True, the extracted value will be converted to float. Defaults to True.
+        is_string (bool): If True, the extracted value will be treated as a string. Defaults to False.
+    Returns:
+        The extracted value if found, otherwise the fallback value.
+    """
     if fallback is None:
         fallback = "" if is_string else 0
 
@@ -146,7 +155,6 @@ def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_str
         pass
 
     return fallback
-
 
 
 def filling_template(folder_with_raw_data, current_data_processing_folder,
@@ -263,5 +271,4 @@ def main():
 
 
 if __name__ == '__main__':
-    
     main()
