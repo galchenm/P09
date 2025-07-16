@@ -14,6 +14,21 @@ from pathlib import Path
 
 os.nice(0)
 
+LIMIT_FOR_RESERVED_NODES = 25
+def are_the_reserved_nodes_overloaded(node_list):
+    """Check if the reserved nodes are overloaded by counting running jobs.
+    Args:
+        node_list (str): Comma-separated list of reserved nodes.
+    Returns:
+        bool: True if the number of running jobs exceeds the limit, False otherwise.
+    """
+    try:
+        running_cmd = f'squeue -w {node_list} -t running'
+        running_jobs = subprocess.check_output(shlex.split(running_cmd)).decode().splitlines()
+    except subprocess.CalledProcessError:
+        running_jobs = []
+    return len(running_jobs) > LIMIT_FOR_RESERVED_NODES
+
 def xds_start(current_data_processing_folder, command_for_data_processing,
                 USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
     """Prepare and submit the XDS job."""
@@ -25,34 +40,48 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
     if "maxwell" not in RESERVED_NODE:
         login_node = RESERVED_NODE.split(",")[0] if "," in RESERVED_NODE else RESERVED_NODE
         ssh_command = f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no -o PasswordAuthentication=no -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=10 -l {USER} -i {sshPrivateKeyPath} {login_node}"
-        sbatch_file = [
-            "#!/bin/sh\n",
-            f"#SBATCH --job-name={job_name}\n",
-            f"#SBATCH --partition={SLURM_PARTITION}\n",
-            f"#SBATCH --reservation={RESERVED_NODE}\n",
-            "#SBATCH --nodes=1\n",
-            f"#SBATCH --output={out_file}\n",
-            f"#SBATCH --error={err_file}\n",
-            "source /etc/profile.d/modules.sh\n",
-            "module load xray\n",
-            f"{command_for_data_processing}\n"
-        ]
-    else:
-        ssh_command = ""
-        sbatch_file = [
-            "#!/bin/sh\n",
-            f"#SBATCH --job-name={job_name}\n",
-            "#SBATCH --partition=allcpu,upex\n",
-            "#SBATCH --time=12:00:00\n",
-            "#SBATCH --nodes=1\n",
-            "#SBATCH --nice=100\n",
-            "#SBATCH --mem=500000\n",
-            f"#SBATCH --output={out_file}\n",
-            f"#SBATCH --error={err_file}\n",
-            "source /etc/profile.d/modules.sh\n",
-            "module load xray\n",
-            f"{command_for_data_processing}\n"
-        ]
+        reserved_nodes_overloaded = are_the_reserved_nodes_overloaded(RESERVED_NODE)
+        
+        if not reserved_nodes_overloaded:
+            sbatch_file = [
+                "#!/bin/sh\n",
+                f"#SBATCH --job-name={job_name}\n",
+                f"#SBATCH --partition={SLURM_PARTITION}\n",
+                f"#SBATCH --reservation={RESERVED_NODE}\n",
+                "#SBATCH --nodes=1\n",
+                f"#SBATCH --output={out_file}\n",
+                f"#SBATCH --error={err_file}\n",
+                "source /etc/profile.d/modules.sh\n",
+                "module load xray autoproc\n",
+                f"{command_for_data_processing}\n"
+            ]
+        else:
+            sbatch_file = [
+                "#!/bin/sh\n",
+                f"#SBATCH --job-name={job_name}\n",
+                f"#SBATCH --partition=allcpu,upex,short\n",
+                "#SBATCH --nodes=1\n",
+                f"#SBATCH --output={out_file}\n",
+                f"#SBATCH --error={err_file}\n",
+                "source /etc/profile.d/modules.sh\n",
+                "module load xray autoproc\n",
+                f"{command_for_data_processing}\n"
+            ]
+        else:
+            sbatch_file = [
+                "#!/bin/sh\n",
+                f"#SBATCH --job-name={job_name}\n",
+                "#SBATCH --partition=allcpu,upex\n",
+                "#SBATCH --time=12:00:00\n",
+                "#SBATCH --nodes=1\n",
+                "#SBATCH --nice=100\n",
+                "#SBATCH --mem=500000\n",
+                f"#SBATCH --output={out_file}\n",
+                f"#SBATCH --error={err_file}\n",
+                "source /etc/profile.d/modules.sh\n",
+                "module load xray autoproc\n",
+                f"{command_for_data_processing}\n"
+            ]
 
     with open(slurmfile, 'w') as fh:
         fh.writelines(sbatch_file)
@@ -172,7 +201,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
     folder_with_raw_data = Path(folder_with_raw_data)
     current_data_processing_folder = Path(current_data_processing_folder)
 
-    shutil.copy(XDS_INP_template, current_data_processing_folder / 'template.INP')
+    shutil.copy(XDS_INP_template, current_data_processing_folder / 'xds/template.INP')
 
     info_path = folder_with_raw_data / 'info.txt'
     if not info_path.exists() or info_path.stat().st_size == 0:
@@ -210,20 +239,30 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         "UNIT_CELL_CONSTANTS": f"UNIT_CELL_CONSTANTS = {a:.2f} {b:.2f} {c:.2f} {alpha:.2f} {beta:.2f} {gamma:.2f}" if all([a, b, c, alpha, beta, gamma]) else "!UNIT_CELL_CONSTANTS",
     }
 
-    with open(current_data_processing_folder / 'template.INP', 'r') as f:
+    with open(current_data_processing_folder / 'xds/template.INP', 'r') as f:
         src = Template(f.read())
-    with open(current_data_processing_folder / 'XDS.INP', 'w') as f:
+    with open(current_data_processing_folder / 'xds/XDS.INP', 'w') as f:
         f.write(src.substitute(template_data))
 
-    os.remove(current_data_processing_folder / 'template.INP')
+    os.remove(current_data_processing_folder / 'xds/template.INP')
 
-    xds_start(current_data_processing_folder, command_for_data_processing,
+    xds_start(os.path.join(current_data_processing_folder,'xds'), 'xds_par',
             USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
+    #running autoPROC
+    command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -i {folder_with_raw_data} > out.log"
+    xds_start(os.path.join(current_data_processing_folder,'autoPROC'), f'{command_for_data_processing}',
+            USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
+    
 
 def main():
     """Main function to process the command line arguments and call the filling_template function."""
     folder_with_raw_data = sys.argv[1]
+    
     current_data_processing_folder = sys.argv[2]
+    os.makedirs(current_data_processing_folder, exist_ok=True)
+    os.makedirs(os.path.join(current_data_processing_folder, 'xds'), exist_ok=True)
+    os.makedirs(os.path.join(current_data_processing_folder, 'autoPROC'), exist_ok=True)
+    
     ORGX = float(sys.argv[3]) if sys.argv[3] != "None" else 0
     ORGY = float(sys.argv[4]) if sys.argv[4] != "None" else 0
     DISTANCE_OFFSET = float(sys.argv[5])

@@ -4,6 +4,9 @@
 
 import os
 import sys
+import time
+import math
+import fabio
 import gemmi
 import glob
 import re
@@ -16,6 +19,20 @@ from collections import defaultdict
 os.nice(0)
 
 SLEEP_TIME = 10
+LIMIT_FOR_RESERVED_NODES = 25
+def are_the_reserved_nodes_overloaded(node_list):
+    """Check if the reserved nodes are overloaded by counting running jobs.
+    Args:
+        node_list (str): Comma-separated list of reserved nodes.
+    Returns:
+        bool: True if the number of running jobs exceeds the limit, False otherwise.
+    """
+    try:
+        running_cmd = f'squeue -w {node_list} -t running'
+        running_jobs = subprocess.check_output(shlex.split(running_cmd)).decode().splitlines()
+    except subprocess.CalledProcessError:
+        running_jobs = []
+    return len(running_jobs) > LIMIT_FOR_RESERVED_NODES
 
 def xds_start(current_data_processing_folder, command_for_data_processing,
                 USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
@@ -28,26 +45,49 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
     if "maxwell" not in RESERVED_NODE:
         login_node = RESERVED_NODE.split(",")[0] if "," in RESERVED_NODE else RESERVED_NODE
         ssh_command = f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no -o PasswordAuthentication=no -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=10 -l {USER} -i {sshPrivateKeyPath} {login_node}"
-        sbatch_file = [
-            "#!/bin/sh\n",
-            f"#SBATCH --job-name={job_name}\n",
-            f"#SBATCH --partition={SLURM_PARTITION}\n",
-            f"#SBATCH --reservation={RESERVED_NODE}\n",
-            "#SBATCH --nodes=1\n",
-            f"#SBATCH --output={out_file}\n",
-            f"#SBATCH --error={err_file}\n",
-            "source /etc/profile.d/modules.sh\n",
-            "module load xray\n",
-            f"{command_for_data_processing}\n",
-            f"sleep {SLEEP_TIME}\n",
-            f"cd {current_data_processing_folder}\n",
-            "cp GXPARM.XDS XPARM.XDS\n",
-            "cp XDS_ASCII.HKL XDS_ASCII.HKL_1\n",
-            "mv CORRECT.LP CORRECT.LP_1\n",
-            "sed -i 's/ JOB= XYCORR INIT/!JOB= XYCORR INIT/g' XDS.INP\n",
-            "sed -i 's/!JOB= CORRECT/ JOB= DEFPIX INTEGRATE CORRECT/g' XDS.INP\n",
-            f"{command_for_data_processing}\n"
-        ]
+        
+        reserved_nodes_overloaded = are_the_reserved_nodes_overloaded(RESERVED_NODE)
+        if not reserved_nodes_overloaded:
+            sbatch_file = [
+                "#!/bin/sh\n",
+                f"#SBATCH --job-name={job_name}\n",
+                f"#SBATCH --partition={SLURM_PARTITION}\n",
+                f"#SBATCH --reservation={RESERVED_NODE}\n",
+                "#SBATCH --nodes=1\n",
+                f"#SBATCH --output={out_file}\n",
+                f"#SBATCH --error={err_file}\n",
+                "source /etc/profile.d/modules.sh\n",
+                "module load xray\n",
+                f"{command_for_data_processing}\n",
+                f"sleep {SLEEP_TIME}\n",
+                f"cd {current_data_processing_folder}\n",
+                "cp GXPARM.XDS XPARM.XDS\n",
+                "cp XDS_ASCII.HKL XDS_ASCII.HKL_1\n",
+                "mv CORRECT.LP CORRECT.LP_1\n",
+                "sed -i 's/ JOB= XYCORR INIT/!JOB= XYCORR INIT/g' XDS.INP\n",
+                "sed -i 's/!JOB= CORRECT/ JOB= DEFPIX INTEGRATE CORRECT/g' XDS.INP\n",
+                f"{command_for_data_processing}\n"
+            ]
+        else:
+            sbatch_file = [
+                "#!/bin/sh\n",
+                f"#SBATCH --job-name={job_name}\n",
+                f"#SBATCH --partition=allcpu,upex,short\n",
+                "#SBATCH --nodes=1\n",
+                f"#SBATCH --output={out_file}\n",
+                f"#SBATCH --error={err_file}\n",
+                "source /etc/profile.d/modules.sh\n",
+                "module load xray\n",
+                f"{command_for_data_processing}\n",
+                f"sleep {SLEEP_TIME}\n",
+                f"cd {current_data_processing_folder}\n",
+                "cp GXPARM.XDS XPARM.XDS\n",
+                "cp XDS_ASCII.HKL XDS_ASCII.HKL_1\n",
+                "mv CORRECT.LP CORRECT.LP_1\n",
+                "sed -i 's/ JOB= XYCORR INIT/!JOB= XYCORR INIT/g' XDS.INP\n",
+                "sed -i 's/!JOB= CORRECT/ JOB= DEFPIX INTEGRATE CORRECT/g' XDS.INP\n",
+                f"{command_for_data_processing}\n"
+            ]            
     else:
         ssh_command = ""
         sbatch_file = [
@@ -188,9 +228,74 @@ def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_str
         pass
     return fallback
 
+def calculation_high_resolution(detector_distance, wavelength, N_pixels_to_the_short_edge=2462, N_pixels_to_the_long_edge=2526, pixel_size=0.000172):
+    """Calculate the high resolution based on the detector distance, wavelength, and pixel dimensions.
+    Args:
+        detector_distance (float): The distance from the detector to the sample in mm.
+        wavelength (float): The wavelength of the X-ray in Angstroms.
+        N_pixels_to_the_short_edge (int): Number of pixels in the X direction.
+        N_pixels_to_the_long_edge (int): Number of pixels in the Y direction.
+    Returns:
+        float: The calculated high resolution in Angstroms.
+    """
+    
+    N_pixels_to_the_short_edge /= 2
+    N_pixels_to_the_long_edge /= 2
+
+    distance_to_the_short_edge = pixel_size * N_pixels_to_the_short_edge # [m] 
+    distance_to_the_long_edge = pixel_size * N_pixels_to_the_long_edge # [m]
+
+    resolution_to_the_short_edge = wavelength / (2* math.sin(0.5 * math.atan(distance_to_the_short_edge/detector_distance)))
+    resolution_to_the_long_edge = wavelength / (2* math.sin(0.5 * math.atan(distance_to_the_long_edge/detector_distance)))
+
+    return max(resolution_to_the_short_edge, resolution_to_the_long_edge)
+
+def wait_until_file_is_readable(filepath, timeout=10):
+    """Wait until a file is readable.
+    Args:
+        filepath (str): Path to the file to check.
+        timeout (int): Maximum time to wait in seconds.
+    """
+    start_time = time.time()
+    while True:
+        try:
+            with open(filepath, 'rb'):
+                return  # File can be opened for reading
+        except Exception as e:
+            if time.time() - start_time > timeout:
+                raise TimeoutError(f"Timeout: File {filepath} still not readable after {timeout} seconds. Error: {e}")
+            time.sleep(0.5)  # Wait and retry
+
+def retrieving_info_from_cbf(cbf_file):
+    """Retrieve pixel size and dimensions from a CBF file.
+    Args:
+        cbf_file (str): Path to the CBF file.
+    Returns:    
+        tuple: A tuple containing the number of pixels in the short edge, long edge, and pixel size.
+    Raises:
+        TimeoutError: If the file is not readable within the specified timeout.
+    """
+    wait_until_file_is_readable(cbf_file, timeout=30)
+    img = fabio.open(cbf_file)
+    header = img.header
+    if "X-Binary-Size-Fastest-Dimension" not in header or "X-Binary-Size-Second-Dimension" not in header:
+        print(f"Error: Missing X-Binary-Size headers in {cbf_file}")
+        N_PIXELS_TO_THE_SHORT_EDGE = 2462  # Default value
+        N_PIXELS_TO_THE_LONG_EDGE = 2526   # Default value
+        pixel_size = 0.000172  # Default value
+    else:
+        N_PIXELS_TO_THE_SHORT_EDGE = float(header["X-Binary-Size-Fastest-Dimension"])
+        N_PIXELS_TO_THE_LONG_EDGE = float(header["X-Binary-Size-Second-Dimension"])
+        lines = header["_array_data.header_contents"].splitlines()
+        pixel_line = next((line for line in lines if "Pixel_size" in line), None)
+        match = re.search(r"Pixel_size\s+([\deE\.\-]+)\s*m\s*x\s*([\deE\.\-]+)\s*m", pixel_line)
+        if match:
+            pixel_size = float(match.group(1))
+    img.close()    
+    return N_PIXELS_TO_THE_SHORT_EDGE, N_PIXELS_TO_THE_LONG_EDGE, pixel_size
 
 def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=0, ORGY=0, position=None,
-                    FIRST=1, LAST=255, REFERENCE_DATA_SET="!REFERENCE_DATA_SET", DISTANCE_OFFSET=0, 
+                    FIRST=1, LAST=10000, REFERENCE_DATA_SET="!REFERENCE_DATA_SET", DISTANCE_OFFSET=0, 
                     NAME_TEMPLATE_OF_DATA_FRAMES='blabla', command_for_data_processing='xds_par', 
                     XDS_INP_template=None, USER=None, RESERVED_NODE=None, sshPrivateKeyPath=None, 
                     sshPublicKeyPath=None
@@ -223,6 +328,17 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
             cell_file = pdb_matches[0]
             a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = parse_UC_file(cell_file)
 
+    if REFERENCE_DATA_SET in ["!REFERENCE_DATA_SET", "None"]:
+        REFERENCE_DATA_SET_matches = glob.glob(str(Path(folder_with_raw_data) / "XDS_ASCII.HKL"))
+        if REFERENCE_DATA_SET_matches:
+            REFERENCE_DATA_SET = REFERENCE_DATA_SET_matches[0]
+        else:
+            REFERENCE_DATA_SET = "!REFERENCE_DATA_SET"
+    
+    cbf_to_open = NAME_TEMPLATE_OF_DATA_FRAMES.replace("?????", "00001")
+    N_PIXELS_TO_THE_SHORT_EDGE, N_PIXELS_TO_THE_LONG_EDGE, pixel_size = retrieving_info_from_cbf(cbf_to_open)
+    high_res = calculation_high_resolution(DETECTOR_DISTANCE, WAVELENGTH, N_PIXELS_TO_THE_SHORT_EDGE, N_PIXELS_TO_THE_LONG_EDGE, pixel_size)
+
     template_data = {
         "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
         "ORGX": ORGX,
@@ -231,24 +347,28 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         "OSCILLATION_RANGE": OSCILLATION_RANGE,
         "WAVELENGTH": WAVELENGTH,
         "FIRST": FIRST,
-        "LAST": LAST,
+        "LAST": LAST, #assume the crystal is not dead by this time
         "REFERENCE_DATA_SET": REFERENCE_DATA_SET,
         "SPACE_GROUP_NUMBER": f"SPACE_GROUP_NUMBER = {SPACE_GROUP_NUMBER}" if SPACE_GROUP_NUMBER else "SPACE_GROUP_NUMBER = 0",
         "UNIT_CELL_CONSTANTS": f"UNIT_CELL_CONSTANTS = {a:.2f} {b:.2f} {c:.2f} {alpha:.2f} {beta:.2f} {gamma:.2f}" if all([a, b, c, alpha, beta, gamma]) else "!UNIT_CELL_CONSTANTS",
-        "INCLUDE_RESOLUTION_RANGE": "50.0 1.41", #default parameters
+        "INCLUDE_RESOLUTION_RANGE": f"50.0 {high_res}", #default parameters
         "ROTATION_AXIS": "1.0 0.0 0.0" if position % 2 == 0 else "-1.0 0.0 0.0"
     }
 
-    with open(current_data_processing_folder / 'template.INP', 'r') as f:
+    with open(current_data_processing_folder / 'xds/template.INP', 'r') as f:
         src = Template(f.read())
-    with open(current_data_processing_folder / 'XDS.INP', 'w') as f:
+    with open(current_data_processing_folder / 'xds/XDS.INP', 'w') as f:
         f.write(src.substitute(template_data))
 
-    os.remove(current_data_processing_folder / 'template.INP')
+    os.remove(current_data_processing_folder / 'xds/template.INP')
 
-    xds_start(current_data_processing_folder, command_for_data_processing,
+    xds_start(os.path.join(current_data_processing_folder,'xds'), 'xds_par',
             USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
-
+    #running autoPROC
+    command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -i {folder_with_raw_data} > out.log"
+    xds_start(os.path.join(current_data_processing_folder,'autoPROC'), f'{command_for_data_processing}',
+            USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
+    
 def group_cbf_by_position(folder):
     """Groups CBF files by their position and frame numbers.
     Args:
@@ -275,7 +395,7 @@ def group_cbf_by_position(folder):
         position_frames[position].append(frame)
         if position not in templates:
             # Reconstruct template using the matched prefix and position
-            template = os.path.join(folder, f"{prefix}_{position_str}_??????.cbf")
+            template = os.path.join(folder, f"{prefix}_{position_str}_?????.cbf")
             templates[position] = template
     results = {}
     for position, frames in position_frames.items():
@@ -291,13 +411,18 @@ def group_cbf_by_position(folder):
 def main():
     """Main function to process command line arguments and call the filling_template function."""
     folder_with_raw_data = sys.argv[1]
+    
     current_data_processing_folder = sys.argv[2]
+    os.makedirs(current_data_processing_folder, exist_ok=True)
+    os.makedirs(os.path.join(current_data_processing_folder, 'xds'), exist_ok=True)
+    os.makedirs(os.path.join(current_data_processing_folder, 'autoPROC'), exist_ok=True)
+    
     ORGX = float(sys.argv[3]) if sys.argv[3] != "None" else 0
     ORGY = float(sys.argv[4]) if sys.argv[4] != "None" else 0
     DISTANCE_OFFSET = float(sys.argv[5])
     command_for_data_processing = sys.argv[6]
     XDS_INP_template = sys.argv[7]
-    REFERENCE_DATA_SET = sys.argv[8] if sys.argv[8] != "None" else "!REFERENCE_DATA_SET=<reference_data_set>"
+    REFERENCE_DATA_SET = sys.argv[8] if sys.argv[8] != "None" else "!REFERENCE_DATA_SET"
     USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath = sys.argv[9:13]
 
     grouped_cbf = group_cbf_by_position(folder_with_raw_data)

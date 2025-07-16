@@ -16,6 +16,22 @@ os.nice(0)
 
 split_lines = 250
 
+LIMIT_FOR_RESERVED_NODES = 25
+def are_the_reserved_nodes_overloaded(node_list):
+    """Check if the reserved nodes are overloaded by counting running jobs.
+    Args:
+        node_list (str): Comma-separated list of reserved nodes.
+    Returns:
+        bool: True if the number of running jobs exceeds the limit, False otherwise.
+    """
+    try:
+        running_cmd = f'squeue -w {node_list} -t running'
+        running_jobs = subprocess.check_output(shlex.split(running_cmd)).decode().splitlines()
+    except subprocess.CalledProcessError:
+        running_jobs = []
+    return len(running_jobs) > LIMIT_FOR_RESERVED_NODES
+
+
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                             cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
     """Prepare and submit the serial data processing job."""
@@ -89,6 +105,8 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
             sbatch_command += f"#SBATCH --error={err_file}\n"
             if "maxwell" not in RESERVED_NODE:
                 login_node = RESERVED_NODE.split(",")[0] if "," in RESERVED_NODE else RESERVED_NODE
+                reserved_nodes_overloaded = are_the_reserved_nodes_overloaded(RESERVED_NODE)
+        
                 ssh_command = (
                     f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no "
                     f"-o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no "
@@ -96,8 +114,11 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                     f"-o PreferredAuthentications=publickey -o ConnectTimeout=10 "
                     f"-l {USER} -i {sshPrivateKeyPath} {login_node}"
                 )
-                sbatch_command += f"#SBATCH --partition={SLURM_PARTITION}\n"
-                sbatch_command += f"#SBATCH --reservation={RESERVED_NODE}\n"
+                if not reserved_nodes_overloaded:
+                    sbatch_command += f"#SBATCH --partition={SLURM_PARTITION}\n"
+                    sbatch_command += f"#SBATCH --reservation={RESERVED_NODE}\n"
+                else:
+                    sbatch_command += f"#SBATCH --partition=allcpu,upex,short\n"
             else:
                 ssh_command = ""
                 sbatch_command += "#SBATCH --partition=allcpu,upex,short\n"
