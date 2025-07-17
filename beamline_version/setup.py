@@ -5,7 +5,10 @@ setup(
     version='1.0.0',
     packages=find_packages(),
     install_requires=[
-        'pyyaml',  # external dependency
+        'pyyaml',
+        'numpy',
+        'fabio',
+        'gemmi',
     ],
     include_package_data=True,
     package_data={
@@ -16,6 +19,7 @@ setup(
             'autoprocessing=autoprocessing.autoprocessing:main',
             'serial=autoprocessing.serial:main',
             'xds=autoprocessing.xds:main',
+            'wedges=autoprocessing.wedges:main',
         ],
     },
     python_requires='>=3.6',

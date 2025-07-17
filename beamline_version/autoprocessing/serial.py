@@ -22,14 +22,14 @@ def are_the_reserved_nodes_overloaded(node_list):
     Args:
         node_list (str): Comma-separated list of reserved nodes.
     Returns:
-        bool: True if the number of running jobs exceeds the limit, False otherwise.
+        bool: True if the number of jobs exceeds the limit, False otherwise.
     """
     try:
-        running_cmd = f'squeue -w {node_list} -t running'
-        running_jobs = subprocess.check_output(shlex.split(running_cmd)).decode().splitlines()
+        jobs_cmd = f'squeue -w {node_list}'
+        all_jobs = subprocess.check_output(shlex.split(jobs_cmd)).decode().splitlines()
     except subprocess.CalledProcessError:
-        running_jobs = []
-    return len(running_jobs) > LIMIT_FOR_RESERVED_NODES
+        all_jobs = []
+    return len(all_jobs) > LIMIT_FOR_RESERVED_NODES
 
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,

@@ -20,14 +20,14 @@ def are_the_reserved_nodes_overloaded(node_list):
     Args:
         node_list (str): Comma-separated list of reserved nodes.
     Returns:
-        bool: True if the number of running jobs exceeds the limit, False otherwise.
+        bool: True if the number of jobs exceeds the limit, False otherwise.
     """
     try:
-        running_cmd = f'squeue -w {node_list} -t running'
-        running_jobs = subprocess.check_output(shlex.split(running_cmd)).decode().splitlines()
+        jobs_cmd = f'squeue -w {node_list}'
+        all_jobs = subprocess.check_output(shlex.split(jobs_cmd)).decode().splitlines()
     except subprocess.CalledProcessError:
-        running_jobs = []
-    return len(running_jobs) > LIMIT_FOR_RESERVED_NODES
+        all_jobs = []
+    return len(all_jobs) > LIMIT_FOR_RESERVED_NODES
 
 def xds_start(current_data_processing_folder, command_for_data_processing,
                 USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
@@ -251,7 +251,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
     #running autoPROC
     command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -i {folder_with_raw_data} > out.log"
     xds_start(os.path.join(current_data_processing_folder,'autoPROC'), f'{command_for_data_processing}',
-            USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
+            USER, ["maxwell"], SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
     
 
 def main():
