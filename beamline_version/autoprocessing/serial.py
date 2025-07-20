@@ -94,8 +94,8 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
         name = f"{name1}{suffix}"
         stream = f"{name1}.stream{suffix}"
         slurmfile = f"{name}.sh"
-        err_file = Path(current_data_processing_folder) / f"{name}_serial.err"
-        out_file = Path(current_data_processing_folder) / f"{name}_serial.out"
+        err_file = Path(current_data_processing_folder) / f"{error_dir}/{name}_serial.err"
+        out_file = Path(current_data_processing_folder) / f"{error_dir}/{name}_serial.out"
     
         print(f"Processing {split_file.name} -> {stream}")
         with open(slurmfile, "w") as f:

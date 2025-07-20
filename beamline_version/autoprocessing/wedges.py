@@ -15,6 +15,7 @@ import subprocess
 from string import Template
 from pathlib import Path
 from collections import defaultdict
+import shlex
 
 os.nice(0)
 
@@ -193,7 +194,7 @@ def parse_UC_file(UC_file):
             al = float(match.group(4))
             be = float(match.group(5))
             ga = float(match.group(6))
-            return a, b, c, al, be, ga, "0"  # Default space group number
+            return a, b, c, al, be, ga, None  # Default space group number
         else:
             raise ValueError("Unit cell parameters not found in the provided file.")
             return None, None, None, None, None, None, None
@@ -297,14 +298,13 @@ def retrieving_info_from_cbf(cbf_file):
 def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=0, ORGY=0, position=None,
                     FIRST=1, LAST=10000, REFERENCE_DATA_SET="!REFERENCE_DATA_SET", DISTANCE_OFFSET=0, 
                     NAME_TEMPLATE_OF_DATA_FRAMES='blabla', command_for_data_processing='xds_par', 
-                    XDS_INP_template=None, USER=None, RESERVED_NODE=None, sshPrivateKeyPath=None, 
+                    XDS_INP_template=None, USER=None, RESERVED_NODE=None, SLURM_PARTITION=None, sshPrivateKeyPath=None, 
                     sshPublicKeyPath=None
                     ):
     """Fills the geometry template with parameters extracted from info.txt and prepares for data processing."""
     folder_with_raw_data = Path(folder_with_raw_data)
     current_data_processing_folder = Path(current_data_processing_folder)
-
-    shutil.copy(XDS_INP_template, current_data_processing_folder / 'template.INP')
+    shutil.copy(XDS_INP_template, current_data_processing_folder / 'xds/template.INP')
 
     info_path = folder_with_raw_data / 'info.txt'
     if not info_path.exists() or info_path.stat().st_size == 0:
@@ -327,7 +327,9 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         if pdb_matches:
             cell_file = pdb_matches[0]
             a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = parse_UC_file(cell_file)
-
+        else:
+            a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = None, None, None, None, None, None, 0
+            
     if REFERENCE_DATA_SET in ["!REFERENCE_DATA_SET", "None"]:
         REFERENCE_DATA_SET_matches = glob.glob(str(Path(folder_with_raw_data) / "XDS_ASCII.HKL"))
         if REFERENCE_DATA_SET_matches:
@@ -338,7 +340,6 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
     cbf_to_open = NAME_TEMPLATE_OF_DATA_FRAMES.replace("?????", "00001")
     N_PIXELS_TO_THE_SHORT_EDGE, N_PIXELS_TO_THE_LONG_EDGE, pixel_size = retrieving_info_from_cbf(cbf_to_open)
     high_res = calculation_high_resolution(DETECTOR_DISTANCE, WAVELENGTH, N_PIXELS_TO_THE_SHORT_EDGE, N_PIXELS_TO_THE_LONG_EDGE, pixel_size)
-
     template_data = {
         "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
         "ORGX": ORGX,
@@ -349,10 +350,10 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         "FIRST": FIRST,
         "LAST": LAST, #assume the crystal is not dead by this time
         "REFERENCE_DATA_SET": REFERENCE_DATA_SET,
-        "SPACE_GROUP_NUMBER": f"SPACE_GROUP_NUMBER = {SPACE_GROUP_NUMBER}" if SPACE_GROUP_NUMBER else "SPACE_GROUP_NUMBER = 0",
+        "SPACE_GROUP_NUMBER": f"SPACE_GROUP_NUMBER = {SPACE_GROUP_NUMBER}" if SPACE_GROUP_NUMBER else "!SPACE_GROUP_NUMBER",
         "UNIT_CELL_CONSTANTS": f"UNIT_CELL_CONSTANTS = {a:.2f} {b:.2f} {c:.2f} {alpha:.2f} {beta:.2f} {gamma:.2f}" if all([a, b, c, alpha, beta, gamma]) else "!UNIT_CELL_CONSTANTS",
         "INCLUDE_RESOLUTION_RANGE": f"50.0 {high_res}", #default parameters
-        "ROTATION_AXIS": "1.0 0.0 0.0" if position % 2 == 0 else "-1.0 0.0 0.0"
+        "ROTATION_AXIS": "1.0 0.0 0.0" if int(position) % 2 == 0 else "-1.0 0.0 0.0"
     }
 
     with open(current_data_processing_folder / 'xds/template.INP', 'r') as f:
@@ -365,7 +366,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
     xds_start(os.path.join(current_data_processing_folder,'xds'), 'xds_par',
             USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
     #running autoPROC
-    command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -i {folder_with_raw_data} > out.log"
+    command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -I {folder_with_raw_data}"
     xds_start(os.path.join(current_data_processing_folder,'autoPROC'), f'{command_for_data_processing}',
             USER, ["maxwell"], SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
     
@@ -413,6 +414,7 @@ def main():
     folder_with_raw_data = sys.argv[1]
     
     current_data_processing_folder = sys.argv[2]
+    
     os.makedirs(current_data_processing_folder, exist_ok=True)
     os.makedirs(os.path.join(current_data_processing_folder, 'xds'), exist_ok=True)
     os.makedirs(os.path.join(current_data_processing_folder, 'autoPROC'), exist_ok=True)
@@ -420,11 +422,18 @@ def main():
     ORGX = float(sys.argv[3]) if sys.argv[3] != "None" else 0
     ORGY = float(sys.argv[4]) if sys.argv[4] != "None" else 0
     DISTANCE_OFFSET = float(sys.argv[5])
+    
     command_for_data_processing = sys.argv[6]
+    
     XDS_INP_template = sys.argv[7]
+    
     REFERENCE_DATA_SET = sys.argv[8] if sys.argv[8] != "None" else "!REFERENCE_DATA_SET"
-    USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath = sys.argv[9:13]
-
+    
+    USER = sys.argv[9] 
+    RESERVED_NODE = sys.argv[10]
+    SLURM_PARTITION = sys.argv[11] 
+    sshPrivateKeyPath = sys.argv[12] 
+    sshPublicKeyPath = sys.argv[13]
     grouped_cbf = group_cbf_by_position(folder_with_raw_data)
 
     if grouped_cbf:
@@ -434,9 +443,12 @@ def main():
             LAST = data['end']
             processing_folder = os.path.join(current_data_processing_folder, position)
             os.makedirs(processing_folder, exist_ok=True)
+            os.makedirs(os.path.join(processing_folder, 'xds'), exist_ok=True)
+            os.makedirs(os.path.join(processing_folder, 'autoPROC'), exist_ok=True)
+    
             filling_template(folder_with_raw_data, processing_folder, ORGX, ORGY, position, 
                             FIRST, LAST, REFERENCE_DATA_SET, DISTANCE_OFFSET, NAME_TEMPLATE_OF_DATA_FRAMES,
-                            command_for_data_processing, XDS_INP_template, USER, RESERVED_NODE,
+                            command_for_data_processing, XDS_INP_template, USER, RESERVED_NODE, SLURM_PARTITION,
                             sshPrivateKeyPath, sshPublicKeyPath)
 
             Path(processing_folder, 'flag.txt').touch()

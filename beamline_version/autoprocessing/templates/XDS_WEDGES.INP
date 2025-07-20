@@ -31,7 +31,6 @@ SPOT_RANGE=$FIRST $LAST
 ! BACKGROUND_RANGE=     
 $SPACE_GROUP_NUMBER !96 - lyso                   ! 0 if unknown   
 $UNIT_CELL_CONSTANTS 
-!= $a $b $c $alpha $beta $gamma !79.5 79.5 37.8 90 90 90   
 INCLUDE_RESOLUTION_RANGE= $INCLUDE_RESOLUTION_RANGE !after CORRECT, insert high resol limit; re-run CORRECT 
 FRIEDEL'S_LAW= TRUE !This acts only on the CORRECT step  
 !STRICT_ABSORPTION_CORRECTION= TRUE !uncomment if anomalous signal is strong 

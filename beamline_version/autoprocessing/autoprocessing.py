@@ -159,7 +159,7 @@ def wedges_xds_start(
             REFERENCE_DATA_SET="!REFERENCE_DATA_SET"
             ):
     """Starts the XDS data processing for the given raw data folder."""
-    
+    logger = logging.getLogger('app')
     # Extracting parameters from the configuration
     USER = configuration['USER']
     RESERVED_NODE = configuration['RESERVED_NODE'] if not is_maxwell else "maxwell"
@@ -183,10 +183,11 @@ def wedges_xds_start(
 
 def run(root, configuration, is_force, is_maxwell):
     """Main processing entry point for one dataset folder."""
-
+    logger = logging.getLogger('app')
     logger.info(f'We are here: {root}')
     raw_dir = configuration['crystallography']['raw_directory']
     proc_dir = configuration['crystallography']['processed_directory']
+    USER = configuration['USER']
     
     files = [f for f in os.listdir(root) if os.path.isfile(os.path.join(root, f))]
     info_path = os.path.join(root, 'info.txt')
@@ -266,13 +267,14 @@ def find_and_parse_metadata(base_path):
         sshPublicKeyPath: shared/id_rsa.pub
         userAccount: bttest04
     """
+    logger = logging.getLogger('app')
     logger.info("Parsing metadata...")
     # Recursive search for files like beamtime-metadata*.json
     base_path = base_path.split('/raw')[0] if '/raw' in base_path else base_path
     
     if not os.path.exists(base_path):  # Check if the base path exists
         raise FileNotFoundError(f"The base path {base_path} does not exist.")
-    pattern = os.path.join(f"{base_path}/processed", "beamtime-metadata*.json")
+    pattern = os.path.join(f"{base_path}", "beamtime-metadata*.json")
     json_files = glob.glob(pattern, recursive=True)
     
     for json_file in json_files:
@@ -301,36 +303,50 @@ def find_and_parse_metadata(base_path):
 
     raise FileNotFoundError("No valid beamtime-metadata*.json file found with required fields.")
 
-
-def filling_configuration_file(configuration_file_template):
+def filling_configuration_file(configuration_file_template, processed_directory=None):
     """
-    Fills a YAML configuration template.
+    Fills a YAML configuration template if it contains placeholders.
 
     Parameters:
-    - configuration_file_template (str): Path to the YAML template file with placeholders.
+    - configuration_file_template (str): Path to the YAML template file.
+    - processed_directory (str or None): Path to save filled config. If None, will be extracted.
 
     Returns:
-    - str: Path to the generated filled YAML file.
+    - str: Path to the actual configuration YAML file to use.
     """
-
+    logger = logging.getLogger('app')
+    
     with open(configuration_file_template, "r") as f:
         template_text = f.read()
-        
-    templates_folder = os.path.join(CURRENT_PATH_OF_SCRIPT, 'templates')
     
+    # Check if it's a template (contains $PLACEHOLDER-style variables)
+    if "$" not in template_text:
+        return configuration_file_template  # Not a template
+
+    templates_folder = os.path.join(CURRENT_PATH_OF_SCRIPT, 'templates')
     values = {
         "XDS_INP_template": os.path.join(templates_folder, 'XDS.INP'),
         "XDS_INP_wedges_template": os.path.join(templates_folder, 'XDS_WEDGES.INP'),
         "geometry_for_processing": os.path.join(templates_folder, 'pilatus6M.geom')
-    
     }
-    
+
     filled_template = Template(template_text).safe_substitute(values)
+
+    # Try to extract processed_directory from filled content if not given
+    if processed_directory is None:
+        try:
+            temp_config = yaml.safe_load(filled_template)
+            processed_directory = temp_config['crystallography']['processed_directory']
+        except Exception as e:
+            raise ValueError("Failed to determine processed_directory") from e
+
     now = datetime.now()
-    output_file = os.path.join(f"{CURRENT_PATH_OF_SCRIPT}/filled_config_{now.month}-{now.year}.yaml")
+    output_file = os.path.join(processed_directory, f"filled_config_{now.month}-{now.year}.yaml")
+
     with open(output_file, "w") as f:
         f.write(filled_template)
-
+    
+    logger.info(f"Filled configuration template saved to {output_file}")
     return output_file
 
 def creating_folder_structure(
@@ -353,17 +369,20 @@ def main():
     #reading configuration file
     args = parse_cmdline_args()
     configuration_file = args.config if args.config is not None else f'{CURRENT_PATH_OF_SCRIPT}/templates/configuration_template.yaml'
-    
+
     #If the configuration file is a template, we fill it with values from the beamtime JSON file
     configuration_file = filling_configuration_file(configuration_file) 
+
+    with open(configuration_file,'r') as file:
+        configuration = yaml.safe_load(file)
+
+    raw_directory = configuration['crystallography']['raw_directory']
+    processed_directory = configuration['crystallography']['processed_directory']
+    
     
     is_force = args.force
     is_maxwell = args.maxwell
-    with open(configuration_file,'r') as file:
-        configuration = yaml.safe_load(file)
-    
-    raw_directory = configuration['crystallography']['raw_directory']
-    processed_directory = configuration['crystallography']['processed_directory']
+
     
     while True: 
         #Wait while the directory with raw data appeared

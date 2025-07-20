@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from string import Template
 from pathlib import Path
-
+import shlex
 os.nice(0)
 
 LIMIT_FOR_RESERVED_NODES = 25
@@ -36,7 +36,8 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
     slurmfile = Path(current_data_processing_folder) / f"{job_name}_XDS.sh"
     err_file = Path(current_data_processing_folder) / f"{job_name}_XDS.err"
     out_file = Path(current_data_processing_folder) / f"{job_name}_XDS.out"
-
+    ssh_command = ""
+    
     if "maxwell" not in RESERVED_NODE:
         login_node = RESERVED_NODE.split(",")[0] if "," in RESERVED_NODE else RESERVED_NODE
         ssh_command = f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no -o PasswordAuthentication=no -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=10 -l {USER} -i {sshPrivateKeyPath} {login_node}"
@@ -67,20 +68,20 @@ def xds_start(current_data_processing_folder, command_for_data_processing,
                 "module load xray autoproc\n",
                 f"{command_for_data_processing}\n"
             ]
-        else:
-            sbatch_file = [
-                "#!/bin/sh\n",
-                f"#SBATCH --job-name={job_name}\n",
-                "#SBATCH --partition=allcpu,upex\n",
-                "#SBATCH --time=12:00:00\n",
-                "#SBATCH --nodes=1\n",
-                "#SBATCH --nice=100\n",
-                "#SBATCH --mem=500000\n",
-                f"#SBATCH --output={out_file}\n",
-                f"#SBATCH --error={err_file}\n",
-                "source /etc/profile.d/modules.sh\n",
-                "module load xray autoproc\n",
-                f"{command_for_data_processing}\n"
+    else:
+        sbatch_file = [
+            "#!/bin/sh\n",
+            f"#SBATCH --job-name={job_name}\n",
+            "#SBATCH --partition=allcpu,upex\n",
+            "#SBATCH --time=12:00:00\n",
+            "#SBATCH --nodes=1\n",
+            "#SBATCH --nice=100\n",
+            "#SBATCH --mem=500000\n",
+            f"#SBATCH --output={out_file}\n",
+            f"#SBATCH --error={err_file}\n",
+            "source /etc/profile.d/modules.sh\n",
+            "module load xray autoproc\n",
+            f"{command_for_data_processing}\n"
             ]
 
     with open(slurmfile, 'w') as fh:
@@ -186,7 +187,7 @@ def parse_UC_file(UC_file):
             al = float(match.group(4))
             be = float(match.group(5))
             ga = float(match.group(6))
-            return a, b, c, al, be, ga, "0"  # Default space group number
+            return a, b, c, al, be, ga, None  # Default space group number
         else:
             raise ValueError("Unit cell parameters not found in the provided file.")
             return None, None, None, None, None, None, None
@@ -196,7 +197,7 @@ def parse_UC_file(UC_file):
 def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=0, ORGY=0,
                     DISTANCE_OFFSET=0, NAME_TEMPLATE_OF_DATA_FRAMES='blabla',
                     command_for_data_processing='xds_par', XDS_INP_template=None,
-                    USER=None, RESERVED_NODE=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
+                    USER=None, RESERVED_NODE=None, SLURM_PARTITION=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
     """Fills the geometry template with parameters extracted from info.txt and prepares for data processing."""
     folder_with_raw_data = Path(folder_with_raw_data)
     current_data_processing_folder = Path(current_data_processing_folder)
@@ -225,7 +226,8 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         if pdb_matches:
             cell_file = pdb_matches[0]
             a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = parse_UC_file(cell_file)
-
+        else:
+            a, b, c, alpha, beta, gamma, SPACE_GROUP_NUMBER = None, None, None, None, None, None, 0
     template_data = {
         "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
         "ORGX": ORGX,
@@ -235,7 +237,7 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         "STARTING_ANGLE": STARTING_ANGLE,
         "OSCILLATION_RANGE": OSCILLATION_RANGE,
         "WAVELENGTH": WAVELENGTH,
-        "SPACE_GROUP_NUMBER": f"SPACE_GROUP_NUMBER = {SPACE_GROUP_NUMBER}" if SPACE_GROUP_NUMBER else "SPACE_GROUP_NUMBER = 0",
+        "SPACE_GROUP_NUMBER": f"SPACE_GROUP_NUMBER = {SPACE_GROUP_NUMBER}" if SPACE_GROUP_NUMBER else "!SPACE_GROUP_NUMBER",
         "UNIT_CELL_CONSTANTS": f"UNIT_CELL_CONSTANTS = {a:.2f} {b:.2f} {c:.2f} {alpha:.2f} {beta:.2f} {gamma:.2f}" if all([a, b, c, alpha, beta, gamma]) else "!UNIT_CELL_CONSTANTS",
     }
 
@@ -245,11 +247,11 @@ def filling_template(folder_with_raw_data, current_data_processing_folder, ORGX=
         f.write(src.substitute(template_data))
 
     os.remove(current_data_processing_folder / 'xds/template.INP')
-
+    
     xds_start(os.path.join(current_data_processing_folder,'xds'), 'xds_par',
             USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
     #running autoPROC
-    command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -i {folder_with_raw_data} > out.log"
+    command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -I {folder_with_raw_data}"
     xds_start(os.path.join(current_data_processing_folder,'autoPROC'), f'{command_for_data_processing}',
             USER, ["maxwell"], SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
     
@@ -269,7 +271,7 @@ def main():
     command_for_data_processing = sys.argv[6]
     XDS_INP_template = sys.argv[7]
     USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath = sys.argv[8:13]
-
+    
     res = [
         os.path.join(folder_with_raw_data, file)
         for file in os.listdir(folder_with_raw_data)
@@ -287,7 +289,7 @@ def main():
 
         filling_template(folder_with_raw_data, current_data_processing_folder, ORGX, ORGY,
                         DISTANCE_OFFSET, NAME_TEMPLATE_OF_DATA_FRAMES, command_for_data_processing,
-                        XDS_INP_template, USER, RESERVED_NODE, sshPrivateKeyPath, sshPublicKeyPath)
+                        XDS_INP_template, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath)
 
         Path(current_data_processing_folder, 'flag.txt').touch()
 
