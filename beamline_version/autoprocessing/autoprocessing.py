@@ -40,7 +40,7 @@ import shlex
 import time
 import json
 import argparse
-
+from utils.serial import serial_processing, wedges_processing, rotational_processing
 
 os.nice(0)
 
@@ -100,26 +100,39 @@ def serial_start(
     """Starts the serial data processing for the given raw data folder."""
     
     # Extracting parameters from the configuration
-    USER = configuration['USER']
-    RESERVED_NODE = configuration['RESERVED_NODE'] if not is_maxwell else "maxwell"
-    SLURM_PARTITION = configuration['slurmPartition']
+    user = configuration['user']
+    reserved_nodes = configuration['reserved_nodes'] if not is_maxwell else "maxwell"
+    slurm_partition = configuration['slurmPartition']
     sshPrivateKeyPath =  configuration["sshPrivateKeyPath"]
     sshPublicKeyPath =  configuration["sshPublicKeyPath"]
     ORGX = configuration['crystallography']['ORGX']
     ORGY = configuration['crystallography']['ORGY']
     
-    #DISTANCE_OFFSET is the offset for recalculation of real detector distance
-    DISTANCE_OFFSET = configuration['crystallography']['DISTANCE_OFFSET'] 
+    #distance_offset is the offset for recalculation of real detector distance
+    distance_offset = configuration['crystallography']['distance_offset'] 
     
     cell_file = configuration['crystallography']['cell_file']
     geometry_filename_template = configuration["crystallography"]["geometry_for_processing"]
     
     data_h5path = configuration['crystallography']['data_h5path'] 
+    logger = logging.getLogger('app')
+    logger.info(f'INFO: Running serial_processing')
+    serial_processing(
+        folder_with_raw_data=folder_with_raw_data,
+        current_data_processing_folder=current_data_processing_folder,
+        ORGX=ORGX,
+        ORGY=ORGY,
+        distance_offset=distance_offset,
+        geometry_filename_template=geometry_filename_template,
+        cell_file=cell_file,
+        data_h5path=data_h5path,
+        user=user,
+        reserved_nodes=reserved_nodes,
+        slurm_partition=slurm_partition,
+        sshPrivateKeyPath=sshPrivateKeyPath,
+        sshPublicKeyPath=sshPublicKeyPath
+    )
 
-    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/serial.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {geometry_filename_template} {cell_file} {data_h5path} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
-
-    os.system(command)
-    
 def xds_start(
             folder_with_raw_data, 
             current_data_processing_folder,
@@ -130,25 +143,38 @@ def xds_start(
     """Starts the XDS data processing for the given raw data folder."""
     
     # Extracting parameters from the configuration
-    USER = configuration['USER']
-    RESERVED_NODE = configuration['RESERVED_NODE'] if not is_maxwell else "maxwell"
-    SLURM_PARTITION = configuration['slurmPartition']
+    user = configuration['user']
+    reserved_nodes = configuration['reserved_nodes'] if not is_maxwell else "maxwell"
+    slurm_partition = configuration['slurmPartition']
     sshPrivateKeyPath = configuration["sshPrivateKeyPath"]
     sshPublicKeyPath = configuration["sshPublicKeyPath"]
     #ORGX and ORGY are the origin of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
     ORGY = configuration['crystallography']['ORGY']
     
-    #DISTANCE_OFFSET is the offset for recalculation of real detector distance required for XDS
-    DISTANCE_OFFSET = configuration['crystallography']['DISTANCE_OFFSET'] 
+    #distance_offset is the offset for recalculation of real detector distance required for XDS
+    distance_offset = configuration['crystallography']['distance_offset'] 
     
     command_for_processing_rotational = configuration['crystallography']['command_for_processing_rotational']
     XDS_INP_template = configuration['crystallography']['XDS_INP_template']
 
     logger = logging.getLogger('app')
-    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/xds.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_processing_rotational} {XDS_INP_template} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
-    logger.info(f'INFO: Execute {command}')
-    os.system(command)
+    logger.info(f'INFO: Running rotational_processing')
+
+    rotational_processing(
+        folder_with_raw_data=folder_with_raw_data, 
+        current_data_processing_folder=current_data_processing_folder,
+        ORGX=ORGX, 
+        ORGY=ORGY, 
+        distance_offset=distance_offset, 
+        command_for_data_processing=command_for_processing_rotational, 
+        XDS_INP_template=XDS_INP_template,
+        user=user, 
+        reserved_nodes=reserved_nodes, 
+        slurm_partition=slurm_partition, 
+        sshPrivateKeyPath=sshPrivateKeyPath, 
+        sshPublicKeyPath=sshPublicKeyPath
+    )
 
 def wedges_xds_start(
             folder_with_raw_data, 
@@ -156,30 +182,33 @@ def wedges_xds_start(
             configuration,
             is_force,
             is_maxwell,
-            REFERENCE_DATA_SET="!REFERENCE_DATA_SET"
+            reference_dataset="!reference_dataset"
             ):
     """Starts the XDS data processing for the given raw data folder."""
     logger = logging.getLogger('app')
     # Extracting parameters from the configuration
-    USER = configuration['USER']
-    RESERVED_NODE = configuration['RESERVED_NODE'] if not is_maxwell else "maxwell"
-    SLURM_PARTITION = configuration['slurmPartition']
+    user = configuration['user']
+    reserved_nodes = configuration['reserved_nodes'] if not is_maxwell else "maxwell"
+    slurm_partition = configuration['slurmPartition']
     sshPrivateKeyPath = configuration["sshPrivateKeyPath"]
     sshPublicKeyPath = configuration["sshPublicKeyPath"]
     #ORGX and ORGY are the origin of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
     ORGY = configuration['crystallography']['ORGY']
     
-    #DISTANCE_OFFSET is the offset for recalculation of real detector distance required for XDS
-    DISTANCE_OFFSET = configuration['crystallography']['DISTANCE_OFFSET'] 
+    #distance_offset is the offset for recalculation of real detector distance required for XDS
+    distance_offset = configuration['crystallography']['distance_offset'] 
     
     command_for_processing_rotational = configuration['crystallography']['command_for_processing_rotational']
     XDS_INP_wedges_template = configuration['crystallography']['XDS_INP_wedges_template']
 
     logger = logging.getLogger('app')
-    command = f'python3 {CURRENT_PATH_OF_SCRIPT}/wedges.py {folder_with_raw_data} {current_data_processing_folder} {ORGX} {ORGY} {DISTANCE_OFFSET} {command_for_data_processing} {XDS_INP_wedges_template} {REFERENCE_DATA_SET} {USER} {RESERVED_NODE} {SLURM_PARTITION} {sshPrivateKeyPath} {sshPublicKeyPath}'
-    logger.info(f'INFO: Execute {command}')
-    os.system(command)
+    logger.info(f'INFO: Running wedges_processing')
+
+    wedges_processing(folder_with_raw_data, current_data_processing_folder,
+                    ORGX, ORGY, distance_offset, command_for_processing_rotational, 
+                    XDS_INP_wedges_template, reference_dataset, user, reserved_nodes, 
+                    slurm_partition, sshPrivateKeyPath, sshPublicKeyPath)
 
 def run(root, configuration, is_force, is_maxwell):
     """Main processing entry point for one dataset folder."""
@@ -187,7 +216,7 @@ def run(root, configuration, is_force, is_maxwell):
     logger.info(f'We are here: {root}')
     raw_dir = configuration['crystallography']['raw_directory']
     proc_dir = configuration['crystallography']['processed_directory']
-    USER = configuration['USER']
+    user = configuration['user']
     
     files = [f for f in os.listdir(root) if os.path.isfile(os.path.join(root, f))]
     info_path = os.path.join(root, 'info.txt')
@@ -195,9 +224,14 @@ def run(root, configuration, is_force, is_maxwell):
         logger.info(f"In {root} there is no usable info.txt file.")
         return
     
-    # Read experiment method
+    frames_per_position = 1  # Default value
+    # Read experiment method and frames/position
     with open(info_path, 'r') as f:
         method = next(f).split(':')[-1].strip()
+        for line in f:
+            if 'frames/position:' in line.lower():
+                frames_per_position = int(line.split(':')[-1].strip())
+                break
 
     subpath = root[len(raw_dir):].lstrip(os.sep)
     proc_subpath = os.path.join(proc_dir, subpath)
@@ -210,7 +244,7 @@ def run(root, configuration, is_force, is_maxwell):
 
     # Get pending SLURM jobs
     try:
-        pending_cmd = f'squeue -u {USER} -t pending'
+        pending_cmd = f'squeue -u {user} -t pending'
         pending_jobs = subprocess.check_output(shlex.split(pending_cmd)).decode().splitlines()
     except subprocess.CalledProcessError:
         pending_jobs = []
@@ -239,9 +273,9 @@ def run(root, configuration, is_force, is_maxwell):
     if method == 'rotational':
         logger.info(f"XDS: {root}")
         xds_start(root, proc_subpath, configuration, is_force, is_maxwell)
-    elif method == 'wedges':
+    elif method == 'grid step' and frames_per_position > 1:
         logger.info(f"WEDGES: {root}")
-        wedges_xds_start(root, proc_subpath, configuration, is_force, is_maxwell, REFERENCE_DATA_SET="!REFERENCE_DATA_SET")
+        wedges_xds_start(root, proc_subpath, configuration, is_force, is_maxwell, reference_dataset="!reference_dataset")
     else:
         logger.info(f"SERIAL: {root}")
         serial_start(root, proc_subpath, configuration, is_force, is_maxwell)
@@ -400,14 +434,14 @@ def main():
     reservedNodes = result_parsed_metadata['reservedNodes'] if not args.maxwell is None else ["maxwell"]
     sshPrivateKeyPath = os.path.join(raw_directory.split('/raw')[0], result_parsed_metadata['sshPrivateKeyPath'])
     sshPublicKeyPath = result_parsed_metadata['sshPublicKeyPath']
-    USER = result_parsed_metadata['userAccount'] if args.u is None else args.u
+    user = result_parsed_metadata['userAccount'] if args.u is None else args.u
     slurmPartition = result_parsed_metadata['slurmPartition'] 
     configuration.update({
     "beamtimeId": beamtimeId,
-    "RESERVED_NODE": reservedNodes,
+    "reserved_nodes": reservedNodes,
     "sshPrivateKeyPath": sshPrivateKeyPath,
     "sshPublicKeyPath": sshPublicKeyPath,
-    "USER": USER,
+    "user": user,
     "slurmPartition": slurmPartition,
     })
     

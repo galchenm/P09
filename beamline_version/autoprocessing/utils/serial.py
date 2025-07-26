@@ -11,26 +11,10 @@ import subprocess
 import sys
 from pathlib import Path
 from string import Template
-
-os.nice(0)
+from utils.nodes import are_the_reserved_nodes_overloaded
+from utils.templates import filling_template_serial
 
 split_lines = 250
-
-LIMIT_FOR_RESERVED_NODES = 25
-def are_the_reserved_nodes_overloaded(node_list):
-    """Check if the reserved nodes are overloaded by counting running jobs.
-    Args:
-        node_list (str): Comma-separated list of reserved nodes.
-    Returns:
-        bool: True if the number of jobs exceeds the limit, False otherwise.
-    """
-    try:
-        jobs_cmd = f'squeue -w {node_list}'
-        all_jobs = subprocess.check_output(shlex.split(jobs_cmd)).decode().splitlines()
-    except subprocess.CalledProcessError:
-        all_jobs = []
-    return len(all_jobs) > LIMIT_FOR_RESERVED_NODES
-
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                             cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
@@ -145,110 +129,8 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
         else:
             subprocess.run(f'sbatch {slurmfile}', shell=True, check=True)
 
-    
-def extract_value_from_info(info_path, key, fallback=None, is_float=True, is_string=False):
-    """Extract a value from the info.txt file based on the provided key.
-    Args:
-        info_path (str): Path to the info.txt file.
-        key (str): The key to search for in the file.
-        fallback: The value to return if the key is not found. Defaults to 0 for numeric values and an empty string for string values.
-        is_float (bool): If True, the extracted value will be converted to float. Defaults to True.
-        is_string (bool): If True, the extracted value will be treated as a string. Defaults to False.
-    Returns:
-        The extracted value if found, otherwise the fallback value.
-    """
-    if fallback is None:
-        fallback = "" if is_string else 0
 
-    try:
-        with open(info_path) as f:
-            lines = f.readlines()
-        for line in lines:
-            if key in line:
-                if is_string:
-                    # Get value after the first colon, trim whitespace
-                    return line.split(":", 1)[-1].strip()
-                else:
-                    match = re.search(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?", line)
-                    if match:
-                        return float(match.group()) if is_float else int(float(match.group()))
-    except Exception:
-        pass
-
-    return fallback
-
-
-def filling_template(folder_with_raw_data, current_data_processing_folder,
-                    geometry_filename_template, data_h5path,
-                    ORGX=0, ORGY=0, DISTANCE_OFFSET=0,
-                    cell_file=None, USER=None, RESERVED_NODE=None, SLURM_PARTITION=None, sshPrivateKeyPath=None, sshPublicKeyPath=None):
-    """Fills the geometry template with parameters extracted from info.txt and prepares for data processing."""
-    
-    os.chdir(current_data_processing_folder)
-    template_geom_path = Path(current_data_processing_folder) / 'template.geom'
-    shutil.copy(geometry_filename_template, template_geom_path)
-
-    info_path = Path(folder_with_raw_data) / 'info.txt'
-    if not info_path.exists() or info_path.stat().st_size == 0:
-        print(f"No valid info.txt found in {folder_with_raw_data}")
-        return
-
-    with open(info_path) as f:
-        content = f.read()
-
-    DETECTOR_DISTANCE = extract_value_from_info(info_path, "distance") + DISTANCE_OFFSET
-    ORGX = ORGX or extract_value_from_info(info_path, "ORGX")
-    ORGY = ORGY or extract_value_from_info(info_path, "ORGY")
-    NFRAMES = extract_value_from_info(info_path, "frames", fallback=1, is_float=False)
-    STARTING_ANGLE = extract_value_from_info(info_path, "start angle")
-    OSCILLATION_RANGE = extract_value_from_info(info_path, "degrees/frame")
-    WAVELENGTH = extract_value_from_info(info_path, "wavelength")
-    PHOTON_ENERGY = 12400 / WAVELENGTH
-    
-    if not cell_file:
-        # Try to find a .cell or .pdb file in the raw data folder
-        cell_matches = glob.glob(str(Path(folder_with_raw_data) / "*.cell"))
-        if cell_matches:
-            cell_file = cell_matches[0]
-        else:
-            pdb_matches = glob.glob(str(Path(folder_with_raw_data) / "*.pdb"))
-            if pdb_matches:
-                cell_file = pdb_matches[0]
-
-    indexing_method = extract_value_from_info(info_path, "indexing_method", fallback="mosflm-latt-nocell", is_string=True)
-    template_data = {
-        "DETECTOR_DISTANCE": DETECTOR_DISTANCE,
-        "ORGX": -ORGX,
-        "ORGY": -ORGY,
-        "PHOTON_ENERGY": PHOTON_ENERGY,
-        "data_h5path": data_h5path
-    }
-
-    with open(template_geom_path, 'r') as f:
-        src = Template(f.read())
-
-    with open('geometry.geom', 'w') as monitor_file:
-        monitor_file.write(src.substitute(template_data))
-
-    template_geom_path.unlink()
-    
-    serial_data_processing(
-        folder_with_raw_data, current_data_processing_folder,
-        cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath
-    )
-
-
-def main():
-    """Main function to handle command line arguments and initiate data processing."""
-    # CLI Argument Handling
-    
-    args = sys.argv[1:]
-    
-    if len(args) != 13:
-        print(f"Expected 13 arguments, got {len(args)}")
-        sys.exit(1)
-
-    (
+def serial_processing(
         folder_with_raw_data,
         current_data_processing_folder,
         ORGX,
@@ -262,15 +144,16 @@ def main():
         SLURM_PARTITION,
         sshPrivateKeyPath,
         sshPublicKeyPath
-    ) = args[:]
+    ):
+    """Main function to handle command line arguments and initiate data processing."""
 
     ORGX = float(ORGX) if ORGX != "None" else 0
     ORGY = float(ORGY) if ORGY != "None" else 0
     DISTANCE_OFFSET = float(DISTANCE_OFFSET)
     if cell_file == "None":
         cell_file = None
-    
-    filling_template(
+
+    indexing_method, cell_file = filling_template_serial(
         folder_with_raw_data,
         current_data_processing_folder,
         geometry_filename_template,
@@ -278,18 +161,15 @@ def main():
         ORGX,
         ORGY,
         DISTANCE_OFFSET,
-        cell_file,
-        USER,
-        RESERVED_NODE,
-        SLURM_PARTITION,
-        sshPrivateKeyPath,
-        sshPublicKeyPath
+        cell_file
+    )
+    
+    serial_data_processing(
+        folder_with_raw_data, current_data_processing_folder,
+        cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath
     )
     
     # Create flag file
     flag_file = Path(current_data_processing_folder) / 'flag.txt'
     flag_file.touch(exist_ok=True)
 
-
-if __name__ == '__main__':
-    main()
