@@ -17,7 +17,7 @@ from utils.templates import filling_template_serial
 split_lines = 250
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
-                            cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
+                            cell_file, indexing_method, user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath):
     """Prepare and submit the serial data processing job."""
     job_name = Path(current_data_processing_folder).name
 
@@ -87,20 +87,20 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
             sbatch_command += f"#SBATCH --job-name={name}\n"
             sbatch_command += f"#SBATCH --output={out_file}\n"
             sbatch_command += f"#SBATCH --error={err_file}\n"
-            if "maxwell" not in RESERVED_NODE:
-                login_node = RESERVED_NODE.split(",")[0] if "," in RESERVED_NODE else RESERVED_NODE
-                reserved_nodes_overloaded = are_the_reserved_nodes_overloaded(RESERVED_NODE)
+            if "maxwell" not in reserved_nodes:
+                login_node = reserved_nodes.split(",")[0] if "," in reserved_nodes else reserved_nodes
+                reserved_nodess_overloaded = are_the_reserved_nodess_overloaded(reserved_nodes)
         
                 ssh_command = (
                     f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no "
                     f"-o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no "
                     f"-o PasswordAuthentication=no -o PubkeyAuthentication=yes "
                     f"-o PreferredAuthentications=publickey -o ConnectTimeout=10 "
-                    f"-l {USER} -i {sshPrivateKeyPath} {login_node}"
+                    f"-l {user} -i {sshPrivateKeyPath} {login_node}"
                 )
-                if not reserved_nodes_overloaded:
-                    sbatch_command += f"#SBATCH --partition={SLURM_PARTITION}\n"
-                    sbatch_command += f"#SBATCH --reservation={RESERVED_NODE}\n"
+                if not reserved_nodess_overloaded:
+                    sbatch_command += f"#SBATCH --partition={slurm_partition}\n"
+                    sbatch_command += f"#SBATCH --reservation={reserved_nodes}\n"
                 else:
                     sbatch_command += f"#SBATCH --partition=allcpu,upex,short\n"
             else:
@@ -135,13 +135,13 @@ def serial_processing(
         current_data_processing_folder,
         ORGX,
         ORGY,
-        DISTANCE_OFFSET,
+        distance_offset,
         geometry_filename_template,
         cell_file,
         data_h5path,
-        USER,
-        RESERVED_NODE,
-        SLURM_PARTITION,
+        user,
+        reserved_nodes,
+        slurm_partition,
         sshPrivateKeyPath,
         sshPublicKeyPath
     ):
@@ -149,7 +149,7 @@ def serial_processing(
 
     ORGX = float(ORGX) if ORGX != "None" else 0
     ORGY = float(ORGY) if ORGY != "None" else 0
-    DISTANCE_OFFSET = float(DISTANCE_OFFSET)
+    distance_offset = float(distance_offset)
     if cell_file == "None":
         cell_file = None
 
@@ -160,13 +160,13 @@ def serial_processing(
         data_h5path,
         ORGX,
         ORGY,
-        DISTANCE_OFFSET,
+        distance_offset,
         cell_file
     )
     
     serial_data_processing(
         folder_with_raw_data, current_data_processing_folder,
-        cell_file, indexing_method, USER, RESERVED_NODE, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath
+        cell_file, indexing_method, user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath
     )
     
     # Create flag file

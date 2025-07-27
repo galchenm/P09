@@ -24,8 +24,8 @@ AIR= 0.001
 NAME_TEMPLATE_OF_DATA_FRAMES=$NAME_TEMPLATE_OF_DATA_FRAMES  
 $REFERENCE_DATA_SET
 !REFERENCE_DATA_SET= /asap3/petra3/gpfs/p09/2023/data/11016751/processed/humidity/99p/lyso_01/rotational_001/xds/XDS_ASCII.HKL
-DATA_RANGE=$FIRST $LAST
-SPOT_RANGE=$FIRST $LAST   
+DATA_RANGE=$first_image_index $last_image_index
+SPOT_RANGE=$first_image_index $last_image_index   
 ! BACKGROUND_RANGE=  !rather use defaults (first 5 degrees of rotation) 
 ! BACKGROUND_RANGE=     
 ! BACKGROUND_RANGE=     
@@ -40,7 +40,7 @@ FRIEDEL'S_LAW= TRUE !This acts only on the CORRECT step
 !UNTRUSTED_QUADRILATERAL= x1 y1 x2 y2 x3 y3 x4 y4 ! see documentation 
 TRUSTED_REGION= 0.00 1.41 ! partially use corners of detectors; 1.41421=full use 
 VALUE_RANGE_FOR_TRUSTED_DETECTOR_PIXELS= 5000 30000 ! often 8000 is ok 
-STRONG_PIXEL= 3 ! COLSPOT: only use strong reflections (default is 3) 
+!STRONG_PIXEL= 3 ! COLSPOT: only use strong reflections (default is 3) 
 MINIMUM_NUMBER_OF_PIXELS_IN_A_SPOT= 3 
 REFINE(IDXREF)= AXIS BEAM CELL ORIENTATION  
 REFINE(INTEGRATE)=  BEAM CELL ORIENTATION  

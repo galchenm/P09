@@ -23,6 +23,7 @@ def filling_template_rotational(folder_with_raw_data, current_data_processing_fo
         return
 
     DETECTOR_DISTANCE = extract_value_from_info(info_path, "distance") + DISTANCE_OFFSET
+    
     ORGX = ORGX or extract_value_from_info(info_path, "ORGX")
     ORGY = ORGY or extract_value_from_info(info_path, "ORGY")
     NFRAMES = extract_value_from_info(info_path, "frames", fallback=1, is_float=False)
@@ -58,7 +59,7 @@ def filling_template_rotational(folder_with_raw_data, current_data_processing_fo
         src = Template(f.read())
     with open(current_data_processing_folder / 'xds/XDS.INP', 'w') as f:
         f.write(src.substitute(template_data))
-
+    os.chmod(current_data_processing_folder/ 'xds/XDS.INP', 0o777)
     os.remove(current_data_processing_folder / 'xds/template.INP')
     
 
@@ -81,6 +82,7 @@ def filling_template_serial(folder_with_raw_data, current_data_processing_folder
         content = f.read()
 
     DETECTOR_DISTANCE = extract_value_from_info(info_path, "distance") + DISTANCE_OFFSET
+    DETECTOR_DISTANCE /= 1000
     ORGX = ORGX or extract_value_from_info(info_path, "ORGX")
     ORGY = ORGY or extract_value_from_info(info_path, "ORGY")
     NFRAMES = extract_value_from_info(info_path, "frames", fallback=1, is_float=False)
@@ -134,6 +136,7 @@ def filling_template_wedges(folder_with_raw_data, current_data_processing_folder
         return
 
     DETECTOR_DISTANCE = extract_value_from_info(info_path, "distance") + DISTANCE_OFFSET
+    
     ORGX = ORGX or extract_value_from_info(info_path, "ORGX")
     ORGY = ORGY or extract_value_from_info(info_path, "ORGY")
     #NFRAMES = extract_value_from_info(info_path, "frames", fallback=1, is_float=False)

@@ -40,7 +40,9 @@ import shlex
 import time
 import json
 import argparse
-from utils.serial import serial_processing, wedges_processing, rotational_processing
+from utils.serial import serial_processing
+from utils.wedges import wedges_processing
+from utils.rotational import rotational_processing
 
 os.nice(0)
 
@@ -371,6 +373,9 @@ def filling_configuration_file(configuration_file_template, processed_directory=
         try:
             temp_config = yaml.safe_load(filled_template)
             processed_directory = temp_config['crystallography']['processed_directory']
+            os.makedirs(processed_directory, exist_ok=True)
+            os.chmod(processed_directory, 0o777)
+            print("processed_directory = ", processed_directory)
         except Exception as e:
             raise ValueError("Failed to determine processed_directory") from e
 

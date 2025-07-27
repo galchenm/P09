@@ -16,9 +16,10 @@ from string import Template
 from pathlib import Path
 from collections import defaultdict
 import shlex
-from utils.nodes import are_the_reserved_nodess_overloaded
+from utils.nodes import are_the_reserved_nodes_overloaded
 from utils.UC import parse_UC_file, parse_cryst1_and_spacegroup_number
 from utils.extract import extract_value_from_info
+from utils.templates import filling_template_wedges
 
 SLEEP_TIME = 10 
 
@@ -33,6 +34,7 @@ def xds_start(
     login_node=None
 ):
     """Prepare and submit the XDS job."""
+    os.chdir(current_data_processing_folder)
     
     def get_slurm_header(partition, reservation=None, extras=None):
         lines = [
@@ -152,7 +154,7 @@ def wedges_processing(
     current_data_processing_folder,
     ORGX,
     ORGY,
-    DISTANCE_OFFSET,
+    distance_offset,
     command_for_data_processing,
     XDS_INP_template,
     REFERENCE_DATA_SET,
@@ -166,12 +168,10 @@ def wedges_processing(
 
 
     os.makedirs(current_data_processing_folder, exist_ok=True)
-    os.makedirs(os.path.join(current_data_processing_folder, 'xds'), exist_ok=True)
-    os.makedirs(os.path.join(current_data_processing_folder, 'autoPROC'), exist_ok=True)
-    
+
     ORGX = float(ORGX) if ORGX != "None" else 0
     ORGY = float(ORGY) if ORGY != "None" else 0
-    DISTANCE_OFFSET = float(DISTANCE_OFFSET)
+    distance_offset = float(distance_offset)
 
 
     REFERENCE_DATA_SET = REFERENCE_DATA_SET if REFERENCE_DATA_SET != "None" else "!REFERENCE_DATA_SET"
@@ -189,7 +189,7 @@ def wedges_processing(
             os.makedirs(os.path.join(processing_folder, 'autoPROC'), exist_ok=True)
     
             filling_template_wedges(folder_with_raw_data, processing_folder, ORGX, ORGY, position, 
-                            first_image_index, last_image_index, REFERENCE_DATA_SET, DISTANCE_OFFSET, 
+                            first_image_index, last_image_index, REFERENCE_DATA_SET, distance_offset, 
                             NAME_TEMPLATE_OF_DATA_FRAMES, XDS_INP_template)
             
             login_node = None
@@ -197,12 +197,12 @@ def wedges_processing(
                 login_node = reserved_nodes.split(",")[0] if "," in reserved_nodes else reserved_nodes
 
             
-            xds_start(os.path.join(current_data_processing_folder,'xds'), 'xds_par',
+            xds_start(os.path.join(processing_folder,'xds'), 'xds_par',
                     user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath, login_node=login_node)
 
             #running autoPROC
             #command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -I {folder_with_raw_data}"
-            #xds_start(os.path.join(current_data_processing_folder,'autoPROC'), f'{command_for_data_processing}',
+            #xds_start(os.path.join(processing_folder,'autoPROC'), f'{command_for_data_processing}',
             #        user, ["maxwell"], slurm_partition, sshPrivateKeyPath, sshPublicKeyPath, login_node=login_node)
             
             # Create flag file    

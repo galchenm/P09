@@ -1,7 +1,7 @@
 crystallography:
     ORGX: 1255.3
     ORGY: 1152.9
-    DISTANCE_OFFSET: 0 # [mm]
+    distance_offset: 0 # [mm]
     command_for_processing_rotational: "xds_par" 
     raw_directory: "/asap3/petra3/gpfs/p09/2024/data/11020444/raw"
     converted_directory: "/asap3/petra3/gpfs/p09/2024/data/11020444/processed/galchenm/convert"

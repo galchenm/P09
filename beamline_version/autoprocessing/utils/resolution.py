@@ -12,11 +12,13 @@ def calculation_high_resolution(detector_distance, wavelength, N_pixels_to_the_s
         float: The calculated high resolution in Angstroms.
     """
     
-    N_pixels_to_the_short_edge /= 2
-    N_pixels_to_the_long_edge /= 2
+    N_pixels_to_the_short_edge //= 2
+    N_pixels_to_the_long_edge //= 2
 
     distance_to_the_short_edge = pixel_size * N_pixels_to_the_short_edge # [m] 
     distance_to_the_long_edge = pixel_size * N_pixels_to_the_long_edge # [m]
+
+    detector_distance /= 1000 # m
 
     resolution_to_the_short_edge = wavelength / (2* math.sin(0.5 * math.atan(distance_to_the_short_edge/detector_distance)))
     resolution_to_the_long_edge = wavelength / (2* math.sin(0.5 * math.atan(distance_to_the_long_edge/detector_distance)))
