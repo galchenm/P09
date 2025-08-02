@@ -10,15 +10,13 @@ import gemmi
 import re
 import shutil
 import subprocess
+import logging
 from string import Template
 from pathlib import Path
 import shlex
 from utils.nodes import are_the_reserved_nodes_overloaded
 from utils.templates import filling_template_rotational
-
-import os
-import subprocess
-from pathlib import Path
+from utils.log_setup import setup_logger
 
 def build_ssh_command(user, sshPrivateKeyPath, login_node):
     return (
@@ -102,7 +100,15 @@ def rotational_processing(
     distance_offset, command_for_data_processing, XDS_INP_template,
     user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath):
     """Main function to process the command line arguments and call the filling_template_rotational function."""
-
+    # Setup logger
+    setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="rotational_processing")
+    logger = logging.getLogger("app")
+    logger.info("Starting rotational data processing...")
+    logger.info(f"Processing folder: {folder_with_raw_data}")
+    logger.info(f"Current data processing folder: {current_data_processing_folder}")
+    logger.info(f"Geometry template: {XDS_INP_template}")
+    
+    # Create necessary directories
     os.makedirs(current_data_processing_folder, exist_ok=True)
     os.chmod(current_data_processing_folder, 0o777)
     os.makedirs(os.path.join(current_data_processing_folder, 'xds'), exist_ok=True)
@@ -131,7 +137,7 @@ def rotational_processing(
             NAME_TEMPLATE_OF_DATA_FRAMES = re.sub(r'_master\.', '_??????.', NAME_TEMPLATE_OF_DATA_FRAMES)
         else:
             NAME_TEMPLATE_OF_DATA_FRAMES = re.sub(r'\d+\.', lambda m: '?' * (len(m.group()) - 1) + '.', NAME_TEMPLATE_OF_DATA_FRAMES)
-
+        logger.info(f"Template for data frames: {NAME_TEMPLATE_OF_DATA_FRAMES}")
         filling_template_rotational(folder_with_raw_data, current_data_processing_folder, ORGX, ORGY,
                         distance_offset, NAME_TEMPLATE_OF_DATA_FRAMES, command_for_data_processing,
                         XDS_INP_template)
@@ -139,11 +145,13 @@ def rotational_processing(
         if "maxwell" not in reserved_nodes:
             login_node = reserved_nodes.split(",")[0] if "," in reserved_nodes else reserved_nodes
 
-        
+        logger.info(f"Login node for processing: {login_node}")
+        # Running XDS
+        logger.info(f"Running XDS in {current_data_processing_folder}/xds")
         xds_start(os.path.join(current_data_processing_folder,'xds'), 'xds_par',
         user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath, login_node=login_node)
         #running autoPROC
-
+        logger.info(f"Running autoPROC in {unique_dir}")
         command_for_data_processing = f"process -d {unique_dir}/autoPROC -I {folder_with_raw_data}"
         xds_start(unique_dir, f'{command_for_data_processing}',
                 user, "maxwell", slurm_partition, sshPrivateKeyPath, sshPublicKeyPath, login_node=login_node)

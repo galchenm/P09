@@ -9,18 +9,27 @@ import shlex
 import shutil
 import subprocess
 import sys
+import logger
 from pathlib import Path
 from string import Template
 from utils.nodes import are_the_reserved_nodes_overloaded
 from utils.templates import filling_template_serial
+from utils.log_setup import setup_logger
+import time
 
 split_lines = 250
+chunk_size = 1000
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
-                            cell_file, indexing_method, user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath):
+                            cell_file, indexing_method, user, reserved_nodes, slurm_partition, 
+                            sshPrivateKeyPath, sshPublicKeyPath, data_range=None):
     """Prepare and submit the serial data processing job."""
-    job_name = Path(current_data_processing_folder).name
 
+    logger = logging.getLogger('app')
+
+    job_name = Path(current_data_processing_folder).name
+    logger.info(f"Starting serial data processing for job: {job_name}")
+    
     raw = folder_with_raw_data
     proc = current_data_processing_folder
     pdb = cell_file if cell_file else ""
@@ -45,23 +54,45 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
     # Find files
     list_h5 = "list_h5.lst"
     list_cbf = "list_cbf.lst"
-    with open(list_h5, "w") as f:
-        subprocess.run(f"find {raw} -name '*.h5' | sort", shell=True, stdout=f)
-    with open(list_cbf, "w") as f:
-        subprocess.run(f"find {raw} -name '*.cbf' | sort", shell=True, stdout=f)
+    cbf_files_to_process = []
+    h5_files_to_process = []
+
+    if not data_range:
+        with open(list_h5, "w") as f:
+            subprocess.run(f"find {raw} -name '*.h5' | sort", shell=True, stdout=f)
+        with open(list_cbf, "w") as f:
+            subprocess.run(f"find {raw} -name '*.cbf' | sort", shell=True, stdout=f)
+    else:
+        cbf_files = glob.glob(f"{raw}/*.cbf")
+        h5_files = glob.glob(f"{raw}/*.h5")
+
+        cbf_files_to_process = sorted([file for file in cbf_files if int(file.split(".")[0].split("_")[-1]) in data_range])
+        h5_files_to_process = sorted([file for file in h5_files if int(file.split(".")[0].split("_")[-1]) in data_range])
+        
+        with open(list_cbf, "w") as f:
+            f.write("\n".join(cbf_files_to_process))
+
+        with open(list_h5, "w") as f:
+            f.write("\n".join(h5_files_to_process))
+    
+    last_file = cbf_files_to_process[-1] if cbf_files_to_process else (h5_files_to_process[-1] if h5_files_to_process else None)
+
+    if last_file:
+        while not os.path.exists(last_file):
+            time.sleep(5)
 
     # Determine filetype
     filetype = 0
     if os.path.getsize(list_h5) > 0:
-        print("Found h5 files")
+        logger.info("Found h5 files")
         filetype = 1
 
     if os.path.getsize(list_cbf) > 0:
-        print("Found cbf files")
+        logger.info("Found cbf files")
         filetype = 2
 
     if filetype == 0:
-        print("No .h5 or .cbf files found in the raw folder. Exiting.")
+        logger.info("No .h5 or .cbf files found in the raw folder. Exiting.")
         sys.exit(0)
 
     # Convert list if necessary
@@ -80,8 +111,8 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
         slurmfile = f"{name}.sh"
         err_file = Path(current_data_processing_folder) / f"{error_dir}/{name}_serial.err"
         out_file = Path(current_data_processing_folder) / f"{error_dir}/{name}_serial.out"
-    
-        print(f"Processing {split_file.name} -> {stream}")
+
+        logger.info(f"Processing {split_file.name} -> {stream}")
         with open(slurmfile, "w") as f:
             sbatch_command = "#!/bin/sh\n"
             sbatch_command += f"#SBATCH --job-name={name}\n"
@@ -89,8 +120,8 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
             sbatch_command += f"#SBATCH --error={err_file}\n"
             if "maxwell" not in reserved_nodes:
                 login_node = reserved_nodes.split(",")[0] if "," in reserved_nodes else reserved_nodes
-                reserved_nodess_overloaded = are_the_reserved_nodess_overloaded(reserved_nodes)
-        
+                reserved_nodes_overloaded = are_the_reserved_nodes_overloaded(reserved_nodes)
+
                 ssh_command = (
                     f"/usr/bin/ssh -o BatchMode=yes -o CheckHostIP=no -o StrictHostKeyChecking=no "
                     f"-o GSSAPIAuthentication=no -o GSSAPIDelegateCredentials=no "
@@ -98,7 +129,7 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                     f"-o PreferredAuthentications=publickey -o ConnectTimeout=10 "
                     f"-l {user} -i {sshPrivateKeyPath} {login_node}"
                 )
-                if not reserved_nodess_overloaded:
+                if not reserved_nodes_overloaded:
                     sbatch_command += f"#SBATCH --partition={slurm_partition}\n"
                     sbatch_command += f"#SBATCH --reservation={reserved_nodes}\n"
                 else:
@@ -146,14 +177,22 @@ def serial_processing(
         sshPublicKeyPath
     ):
     """Main function to handle command line arguments and initiate data processing."""
-
+    # Setup logger
+    setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="serial_processing")
+    logger = logging.getLogger("app")
+    
+    logger.info("Starting serial data processing...")
+    logger.info(f"Processing folder: {folder_with_raw_data}")
+    logger.info(f"Current data processing folder: {current_data_processing_folder}")
+    logger.info(f"Geometry template: {geometry_filename_template}")
+    
     ORGX = float(ORGX) if ORGX != "None" else 0
     ORGY = float(ORGY) if ORGY != "None" else 0
     distance_offset = float(distance_offset)
     if cell_file == "None":
         cell_file = None
 
-    indexing_method, cell_file = filling_template_serial(
+    indexing_method, cell_file, NFRAMES = filling_template_serial(
         folder_with_raw_data,
         current_data_processing_folder,
         geometry_filename_template,
@@ -164,10 +203,23 @@ def serial_processing(
         cell_file
     )
     
-    serial_data_processing(
-        folder_with_raw_data, current_data_processing_folder,
-        cell_file, indexing_method, user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath
-    )
+    logger.info(f"Indexing method: {indexing_method}, Cell file: {cell_file}, NFRAMES: {NFRAMES}")
+    
+    if not indexing_method:
+        logger.info("Indexing method could not be determined. Pure hitfinding.")
+    
+    for start_index in range(0, NFRAMES, chunk_size):
+        end_index = min(start_index + chunk_size, NFRAMES)
+        data_range = list(range(start_index, end_index))
+        logger.info(f"Processing frames from {start_index} to {end_index} (data range: {data_range})")
+        
+        # Call the serial data processing function    
+        serial_data_processing(
+            folder_with_raw_data, current_data_processing_folder,
+            cell_file, indexing_method, user, reserved_nodes, 
+            slurm_partition, sshPrivateKeyPath, sshPublicKeyPath,
+            data_range=data_range
+        )
     
     # Create flag file
     flag_file = Path(current_data_processing_folder) / 'flag.txt'

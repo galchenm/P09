@@ -43,8 +43,7 @@ import argparse
 from utils.serial import serial_processing
 from utils.wedges import wedges_processing
 from utils.rotational import rotational_processing
-
-os.nice(0)
+from utils.log_setup import setup_logger
 
 #This is needed to check the number of running/pending processes
 CURRENT_PATH_OF_SCRIPT = os.path.dirname(__file__)
@@ -67,30 +66,6 @@ def parse_cmdline_args():
     parser.add_argument('--maxwell', default=False, action='store_true', help="Use this flag and associate it with the Maxwell cluster, if you are using it")
     parser.add_argument('--force', default=False, action='store_true', help="Use this flag if you want to force rerunning in the same processed folder")
     return parser.parse_args()
-
-def setup_logger(log_dir=None):
-    import logging, os
-    level = logging.INFO
-    logger = logging.getLogger("app")
-    logger.setLevel(level)
-
-    if log_dir is None:
-        log_dir = os.getcwd()  # fallback to current dir
-
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, 'Auto-processing-P09-beamline.log')
-
-    formatter = logging.Formatter('%(levelname)s - %(message)s')
-    ch = logging.FileHandler(log_file)
-    ch.setLevel(level)
-    ch.setFormatter(formatter)
-
-    if not logger.handlers:  # avoid adding multiple handlers in re-runs
-        logger.addHandler(ch)
-
-    logger.info("Setup logger in PID {}".format(os.getpid()))
-    print("Log file is {}".format(log_file))
-
 
 def serial_start(
             folder_with_raw_data, 
@@ -404,7 +379,7 @@ def creating_folder_structure(
 
 def main():
     """Main entry point for the autoprocessing script."""
-    logger = logging.getLogger('app')
+    
     #reading configuration file
     args = parse_cmdline_args()
     configuration_file = args.config if args.config is not None else f'{CURRENT_PATH_OF_SCRIPT}/templates/configuration_template.yaml'
@@ -432,6 +407,8 @@ def main():
     creating_folder_structure(processed_directory)
 
     setup_logger(processed_directory)
+    logger = logging.getLogger('app')
+    
     result_parsed_metadata = find_and_parse_metadata(raw_directory)
     
     beamtimeId = result_parsed_metadata['beamtimeId'] 

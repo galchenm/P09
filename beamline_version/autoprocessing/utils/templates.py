@@ -118,7 +118,7 @@ def filling_template_serial(folder_with_raw_data, current_data_processing_folder
 
     template_geom_path.unlink()
     
-    return indexing_method, cell_file
+    return indexing_method, cell_file, NFRAMES
 
 
 def filling_template_wedges(folder_with_raw_data, current_data_processing_folder, ORGX=0, ORGY=0, position=None,

@@ -12,6 +12,7 @@ import glob
 import re
 import shutil
 import subprocess
+import logging
 from string import Template
 from pathlib import Path
 from collections import defaultdict
@@ -20,6 +21,7 @@ from utils.nodes import are_the_reserved_nodes_overloaded
 from utils.UC import parse_UC_file, parse_cryst1_and_spacegroup_number
 from utils.extract import extract_value_from_info
 from utils.templates import filling_template_wedges
+from utils.log_setup import setup_logger
 
 SLEEP_TIME = 10 
 
@@ -166,7 +168,14 @@ def wedges_processing(
     ):
     """Main function to process command line arguments and call the filling_template_wedges function."""
 
-
+    # Setup logger
+    setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="wedges_processing")
+    logger = logging.getLogger("app")
+    logger.info("Starting wedges data processing...")
+    logger.info(f"Processing folder: {folder_with_raw_data}")
+    logger.info(f"Current data processing folder: {current_data_processing_folder}")
+    logger.info(f"Geometry template: {XDS_INP_template}")
+    
     os.makedirs(current_data_processing_folder, exist_ok=True)
 
     ORGX = float(ORGX) if ORGX != "None" else 0
@@ -175,10 +184,13 @@ def wedges_processing(
 
 
     REFERENCE_DATA_SET = REFERENCE_DATA_SET if REFERENCE_DATA_SET != "None" else "!REFERENCE_DATA_SET"
-
+    logger.info(f"Reference data set: {REFERENCE_DATA_SET}")
+    # Group CBF files by position and frame numbers
+    logger.info("Grouping CBF files by position and frame numbers...")
     grouped_cbf = group_cbf_by_position(folder_with_raw_data)
 
     if grouped_cbf:
+        logger.info(f"Found {len(grouped_cbf)} positions with CBF files.")
         for position, data in grouped_cbf.items():
             NAME_TEMPLATE_OF_DATA_FRAMES = data['template']
             first_image_index = data['start']
@@ -186,8 +198,11 @@ def wedges_processing(
             processing_folder = os.path.join(current_data_processing_folder, position)
             os.makedirs(processing_folder, exist_ok=True)
             os.makedirs(os.path.join(processing_folder, 'xds'), exist_ok=True)
-            os.makedirs(os.path.join(processing_folder, 'autoPROC'), exist_ok=True)
-    
+            #os.makedirs(os.path.join(processing_folder, 'autoPROC'), exist_ok=True)
+            os.chmod(processing_folder, 0o777)
+            os.chmod(os.path.join(processing_folder, 'xds'), 0o777)
+            #os.chmod(os.path.join(processing_folder, 'autoPROC'), 0o777)
+            logger.info(f"Processing position {position} with frames from {first_image_index} to {last_image_index}.")
             filling_template_wedges(folder_with_raw_data, processing_folder, ORGX, ORGY, position, 
                             first_image_index, last_image_index, REFERENCE_DATA_SET, distance_offset, 
                             NAME_TEMPLATE_OF_DATA_FRAMES, XDS_INP_template)
@@ -196,11 +211,14 @@ def wedges_processing(
             if "maxwell" not in reserved_nodes:
                 login_node = reserved_nodes.split(",")[0] if "," in reserved_nodes else reserved_nodes
 
-            
+            logger.info(f"Login node for processing: {login_node}")
+            # Running XDS
+            logger.info(f"Running XDS in {processing_folder}/xds")
             xds_start(os.path.join(processing_folder,'xds'), 'xds_par',
                     user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath, login_node=login_node)
 
             #running autoPROC
+            #logger.info(f"Running autoPROC in {processing_folder}")
             #command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -I {folder_with_raw_data}"
             #xds_start(os.path.join(processing_folder,'autoPROC'), f'{command_for_data_processing}',
             #        user, ["maxwell"], slurm_partition, sshPrivateKeyPath, sshPublicKeyPath, login_node=login_node)
