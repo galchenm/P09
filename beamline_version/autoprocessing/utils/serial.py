@@ -22,7 +22,7 @@ chunk_size = 1000
 
 def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
                             cell_file, indexing_method, user, reserved_nodes, slurm_partition, 
-                            sshPrivateKeyPath, sshPublicKeyPath, data_range=None):
+                            sshPrivateKeyPath, sshPublicKeyPath, data_range=None, iteration=0):
     """Prepare and submit the serial data processing job."""
 
     logger = logging.getLogger('app')
@@ -52,17 +52,20 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
     subprocess.run("source /etc/profile.d/modules.sh && module load maxwell xray crystfel", shell=True, executable='/bin/bash')
 
     # Find files
-    list_h5 = "list_h5.lst"
-    list_cbf = "list_cbf.lst"
+
     cbf_files_to_process = []
     h5_files_to_process = []
 
     if not data_range:
+        list_h5 = "list_h5.lst"
+        list_cbf = "list_cbf.lst"
         with open(list_h5, "w") as f:
             subprocess.run(f"find {raw} -name '*.h5' | sort", shell=True, stdout=f)
         with open(list_cbf, "w") as f:
             subprocess.run(f"find {raw} -name '*.cbf' | sort", shell=True, stdout=f)
     else:
+        list_h5 = f"list_h5_{iteration}.lst"
+        list_cbf = f"list_cbf_{iteration}.lst"
         cbf_files = glob.glob(f"{raw}/*.cbf")
         h5_files = glob.glob(f"{raw}/*.h5")
 
@@ -102,7 +105,7 @@ def serial_data_processing(folder_with_raw_data, current_data_processing_folder,
     # Split input file
     split_prefix = f"events-{name1}.lst"
     subprocess.run(f"split -a 3 -d -l {split_lines} {list_cbf} {split_prefix}", shell=True)
-    
+    logger.info(f"Split input file into chunks with prefix: {split_prefix}")
     # Create and submit SLURM jobs
     for split_file in sorted(Path(".").glob(f"{split_prefix}*")):
         suffix = split_file.name.replace(f"events-{name1}.lst", "")
@@ -208,6 +211,7 @@ def serial_processing(
     if not indexing_method:
         logger.info("Indexing method could not be determined. Pure hitfinding.")
     
+    iteration = 0
     for start_index in range(0, NFRAMES, chunk_size):
         end_index = min(start_index + chunk_size, NFRAMES)
         data_range = list(range(start_index, end_index))
@@ -218,9 +222,10 @@ def serial_processing(
             folder_with_raw_data, current_data_processing_folder,
             cell_file, indexing_method, user, reserved_nodes, 
             slurm_partition, sshPrivateKeyPath, sshPublicKeyPath,
-            data_range=data_range
+            data_range=data_range, iteration=iteration
         )
-    
+        iteration += 1
+
     # Create flag file
     flag_file = Path(current_data_processing_folder) / 'flag.txt'
     flag_file.touch(exist_ok=True)
