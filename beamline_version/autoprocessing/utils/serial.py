@@ -9,7 +9,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-import logger
+import logging
 from pathlib import Path
 from string import Template
 from utils.nodes import are_the_reserved_nodes_overloaded
