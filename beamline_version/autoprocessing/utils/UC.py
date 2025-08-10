@@ -74,6 +74,29 @@ hm_to_number = {
     'I a -3 d': 230
 }
 
+def get_space_group_number(space_group_str, hm_to_number):
+    """
+    Match the space group string from a PDB file with the hm_to_number dictionary.
+    
+    Args:
+        space_group_str (str): Space group from PDB file (e.g., "P 21 21 21").
+        hm_to_number (dict): Dictionary mapping Hermann–Mauguin names to numbers.
+    
+    Returns:
+        int or None: Space group number if found, else None.
+    """
+    # Removing extra spaces, making consistent spacing, and uppercasing
+    normalized = " ".join(space_group_str.strip().split()).upper()
+    
+    # Check if the normalized string is in the dictionary
+    if normalized in hm_to_number:
+        return hm_to_number[normalized]
+
+    # If not found, try adding spaces between letters and numbers
+    spaced = re.sub(r"([A-Z])(\d)", r"\1 \2", normalized)
+    spaced = " ".join(spaced.split())
+    return hm_to_number.get(spaced, None)
+
 
 def parse_cryst1_and_spacegroup_number(file_path):
     """Parse the CRYST1 line from a PDB file to extract unit cell parameters and space group number.
@@ -107,7 +130,7 @@ def parse_cryst1_and_spacegroup_number(file_path):
                     beta = float(match.group(5))
                     gamma = float(match.group(6))
                     space_group = match.group(7).strip()
-                    sg_number = hm_to_number.get(space_group, None) #gemmi.SpaceGroup(space_group).number
+                    sg_number = get_space_group_number(space_group, hm_to_number)
                     return a, b, c, alpha, beta, gamma, sg_number
 
     raise ValueError("No CRYST1 line found in the provided PDB file.")
