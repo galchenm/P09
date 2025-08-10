@@ -125,6 +125,7 @@ def xds_start(
     slurm_partition = configuration['slurmPartition']
     sshPrivateKeyPath = configuration["sshPrivateKeyPath"]
     sshPublicKeyPath = configuration["sshPublicKeyPath"]
+    
     #ORGX and ORGY are the origin of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
     ORGY = configuration['crystallography']['ORGY']
@@ -159,16 +160,17 @@ def wedges_xds_start(
             configuration,
             is_force,
             is_maxwell,
-            reference_dataset="!reference_dataset"
+            reference_dataset="!REFERENCE_DATA_SET"
             ):
-    """Starts the XDS data processing for the given raw data folder."""
-    logger = logging.getLogger('app')
+    """Starts the data processing for the given raw data folder of wedge scan."""
+    
     # Extracting parameters from the configuration
     user = configuration['user']
     reserved_nodes = configuration['reserved_nodes'] if not is_maxwell else "maxwell"
     slurm_partition = configuration['slurmPartition']
     sshPrivateKeyPath = configuration["sshPrivateKeyPath"]
     sshPublicKeyPath = configuration["sshPublicKeyPath"]
+    
     #ORGX and ORGY are the origin of the detector that is needed for xds data processing
     ORGX = configuration['crystallography']['ORGX']
     ORGY = configuration['crystallography']['ORGY']
@@ -350,7 +352,7 @@ def filling_configuration_file(configuration_file_template, processed_directory=
             processed_directory = temp_config['crystallography']['processed_directory']
             os.makedirs(processed_directory, exist_ok=True)
             os.chmod(processed_directory, 0o777)
-            print("processed_directory = ", processed_directory)
+            
         except Exception as e:
             raise ValueError("Failed to determine processed_directory") from e
 

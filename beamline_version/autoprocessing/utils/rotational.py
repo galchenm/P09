@@ -101,8 +101,8 @@ def rotational_processing(
     user, reserved_nodes, slurm_partition, sshPrivateKeyPath, sshPublicKeyPath):
     """Main function to process the command line arguments and call the filling_template_rotational function."""
     # Setup logger
-    setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="rotational_processing")
-    logger = logging.getLogger("app")
+    logger = setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="rotational_processing")
+    
     logger.info("Starting rotational data processing...")
     logger.info(f"Processing folder: {folder_with_raw_data}")
     logger.info(f"Current data processing folder: {current_data_processing_folder}")

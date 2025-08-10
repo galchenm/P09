@@ -9,13 +9,13 @@ import shlex
 import shutil
 import subprocess
 import sys
-import logging
 from pathlib import Path
 from string import Template
 from utils.nodes import are_the_reserved_nodes_overloaded
 from utils.templates import filling_template_serial
 from utils.log_setup import setup_logger
 import time
+import logging
 
 split_lines = 250
 chunk_size = 1000
@@ -181,8 +181,7 @@ def serial_processing(
     ):
     """Main function to handle command line arguments and initiate data processing."""
     # Setup logger
-    setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="serial_processing")
-    logger = logging.getLogger("app")
+    logger = setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="serial_processing")
     
     logger.info("Starting serial data processing...")
     logger.info(f"Processing folder: {folder_with_raw_data}")

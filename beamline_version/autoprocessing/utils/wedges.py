@@ -169,8 +169,8 @@ def wedges_processing(
     """Main function to process command line arguments and call the filling_template_wedges function."""
 
     # Setup logger
-    setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="wedges_processing")
-    logger = logging.getLogger("app")
+    logger = setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="wedges_processing")
+    
     logger.info("Starting wedges data processing...")
     logger.info(f"Processing folder: {folder_with_raw_data}")
     logger.info(f"Current data processing folder: {current_data_processing_folder}")

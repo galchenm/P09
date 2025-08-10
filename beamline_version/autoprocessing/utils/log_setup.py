@@ -1,9 +1,10 @@
 import logging
+import os
 
 def setup_logger(log_dir=None, log_name="Auto-processing-P09-beamline"):
-    import logging, os
+    
     level = logging.INFO
-    logger = logging.getLogger("app")
+    logger = logging.getLogger(log_name)
     logger.setLevel(level)
 
     if log_dir is None:
@@ -22,4 +23,5 @@ def setup_logger(log_dir=None, log_name="Auto-processing-P09-beamline"):
 
     logger.info(f"Setup logger in PID {os.getpid()}")
     print(f"Log file is {log_file}")
+    return logger
 

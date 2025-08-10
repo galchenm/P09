@@ -14,10 +14,7 @@ from pathlib import Path
 import shlex
 from utils.nodes import are_the_reserved_nodess_overloaded
 from utils.templates import filling_template_rotational
-
-import os
-import subprocess
-from pathlib import Path
+from utils.log_setup import setup_logger
 
 def build_ssh_command(USER, sshPrivateKeyPath, login_node):
     return (
@@ -101,6 +98,13 @@ DISTANCE_OFFSET, command_for_data_processing, XDS_INP_template,
 USER, reserved_nodes, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
     """Main function to process the command line arguments and call the filling_template_rotational function."""
 
+    # Setup logger
+    logger = setup_logger(log_dir=current_data_processing_folder.split('processed')[0] + 'processed', log_name="rotational_processing")
+    logger.info("Starting rotational data processing...")
+    logger.info(f"Processing folder: {folder_with_raw_data}")
+    logger.info(f"Current data processing folder: {current_data_processing_folder}")
+    logger.info(f"XDS template: {XDS_INP_template}")
+    
     os.makedirs(current_data_processing_folder, exist_ok=True)
     os.makedirs(os.path.join(current_data_processing_folder, 'xds'), exist_ok=True)
     os.makedirs(os.path.join(current_data_processing_folder, 'autoPROC'), exist_ok=True)
@@ -131,10 +135,13 @@ USER, reserved_nodes, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath):
         if "maxwell" not in reserved_nodes:
             login_node = reserved_nodes.split(",")[0] if "," in reserved_nodes else reserved_nodes
 
-        
+        logger.info(f"Running XDS in {current_data_processing_folder}")
+    
         xds_start(os.path.join(current_data_processing_folder,'xds'), 'xds_par',
         USER, reserved_nodes, SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath, login_node=login_node)
         #running autoPROC
+        logger.info(f"Running autoPROC in {current_data_processing_folder}")
+    
         command_for_data_processing = f"process -d {os.path.join(current_data_processing_folder,'autoPROC')} -I {folder_with_raw_data}"
         xds_start(os.path.join(current_data_processing_folder,'autoPROC'), f'{command_for_data_processing}',
                 USER, "maxwell", SLURM_PARTITION, sshPrivateKeyPath, sshPublicKeyPath, login_node=login_node)
